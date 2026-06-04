@@ -44,6 +44,49 @@ export function canvasTexture(canvas, rx = 1, ry = 1, { srgb = true, aniso = 8 }
   return t;
 }
 
+/** Concentric-ring accuracy target face (scored by radius from centre). */
+export function accuracyTargetCanvas() {
+  const c = cvs(), x = c.getContext('2d');
+  // gray dish
+  x.fillStyle = '#b9b1a4';
+  x.fillRect(0, 0, 512, 512);
+  blotches(x, 512, 512, 30, (a) => `rgba(140,132,120,${a})`, 80, 0.08);
+  // scoring rings (world radii 0.12/0.30/0.55/0.85/1.15 over a 1.2 disc -> px)
+  const scale = 256 / 1.2;
+  x.strokeStyle = '#e0712a';
+  x.lineWidth = 5;
+  for (const r of [0.30, 0.55, 0.85, 1.15]) {
+    x.beginPath(); x.arc(256, 256, r * scale, 0, Math.PI * 2); x.stroke();
+  }
+  // bullseye
+  x.fillStyle = '#e0712a';
+  x.beginPath(); x.arc(256, 256, 0.12 * scale, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#fff';
+  x.beginPath(); x.arc(256, 256, 0.05 * scale, 0, Math.PI * 2); x.fill();
+  grain(x, 512, 512, 2500, 0.1);
+  return c;
+}
+
+/** Vertical distance ruler board (5m..50m markings). */
+export function rulerCanvas() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 512;
+  const x = c.getContext('2d');
+  x.fillStyle = '#5a4a34'; x.fillRect(0, 0, 128, 512);
+  x.fillStyle = 'rgba(0,0,0,0.25)'; x.fillRect(0, 0, 128, 512);
+  x.strokeStyle = '#e8e0cf'; x.lineWidth = 3;
+  x.beginPath(); x.moveTo(34, 20); x.lineTo(34, 492); x.stroke();
+  x.fillStyle = '#e8e0cf';
+  x.font = 'bold 26px Arial';
+  const labels = ['5m', '10m', '20m', '30m', '40m', 'CLEAR', 'BOT'];
+  for (let i = 0; i < labels.length; i++) {
+    const y = 40 + i * 66;
+    x.fillRect(20, y - 2, 28, 4); // tick
+    x.fillText(labels[i], 56, y + 8);
+  }
+  return c;
+}
+
 /** Worn tan concrete (floor). */
 export function concreteCanvas() {
   const c = cvs(), x = c.getContext('2d');

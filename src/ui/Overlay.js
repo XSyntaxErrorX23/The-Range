@@ -13,7 +13,7 @@ const BUY_ICON = {
 const CONTROLS = [
   ['WASD', 'Move'], ['Shift', 'Walk'], ['Ctrl', 'Crouch'], ['Space', 'Jump'],
   ['Mouse', 'Look'], ['LMB', 'Fire'], ['RMB', 'Aim (ADS) / Classic burst'], ['R', 'Reload'],
-  ['1 / 2 / 3', 'Primary / Pistol / Knife'], ['B', 'Armory (buy menu)'], ['Wheel', 'Cycle weapons'],
+  ['1 / 2 / 3', 'Primary / Pistol / Knife'], ['Y', 'Inspect weapon'], ['B', 'Armory (buy menu)'], ['Wheel', 'Cycle weapons'],
   ['C', 'Cloudburst (smoke)'], ['Q', 'Updraft'], ['E', 'Tailwind (dash)'], ['X', 'Blade Storm'],
   ['V', 'Toggle 1st/3rd person'], ['`', 'Radio comms'], ['F2', 'Range settings'], ['Esc', 'Pause'],
 ];
@@ -39,9 +39,13 @@ export class Overlay {
     this.onReset = () => {};
     this.onRematch = () => {};
     this.onExitSkirmish = () => {};
+    this.getStats = () => ({ session: {}, lifetime: {} });
+    this.onResetLifetime = () => {};
 
     this._build();
     this._buyKeyHandler = this._buyKeyHandler.bind(this);
+    this._pauseKeyHandler = this._pauseKeyHandler.bind(this);
+    this._pauseEscReady = false;
   }
 
   anyOpen() { return this.current != null; }
@@ -132,9 +136,15 @@ export class Overlay {
     pp.appendChild(this._btn('RESUME', 'big', () => this.onResume()));
     pp.appendChild(document.createElement('br'));
     pp.appendChild(this._btn('SETTINGS', 'secondary', () => this.openSettings()));
+    pp.appendChild(this._btn('STATS', 'secondary', () => this.openStats()));
     pp.appendChild(this._btn('CONTROLS', 'secondary', () => this.openControls()));
     pp.appendChild(this._btn('RESET STATS', 'secondary', () => { this.onReset(); }));
     this.pause.appendChild(pp);
+
+    // ---- stats ----
+    this.statsModal = this._modal('m-stats');
+    this.statsPanel = document.createElement('div'); this.statsPanel.className = 'panel stats-panel';
+    this.statsModal.appendChild(this.statsPanel);
 
     // ---- settings ----
     this.settingsModal = this._modal('m-settings');
@@ -299,7 +309,26 @@ export class Overlay {
   }
 
   showStart() { this._refreshModeButtons(); this._show(this.start); }
-  showPause() { this._show(this.pause); }
+
+  showPause() {
+    this._show(this.pause);
+    // let Esc resume — armed after a beat so the Esc that opened the menu doesn't
+    // instantly close it (and to clear the pointer-lock cooldown).
+    this._pauseEscReady = false;
+    window.addEventListener('keydown', this._pauseKeyHandler);
+    setTimeout(() => { this._pauseEscReady = true; }, 350);
+  }
+
+  _pauseKeyHandler(e) {
+    if (e.code !== 'Escape' || e.repeat || !this._pauseEscReady || this.current !== this.pause) return;
+    this.onResume();
+    // The browser blocks re-locking for ~1.25s after an Esc-unlock, so the first
+    // request can be rejected. Retry once the cooldown clears if still paused.
+    clearTimeout(this._resumeRetry);
+    this._resumeRetry = setTimeout(() => {
+      if (this.current === this.pause && !document.pointerLockElement) this.onResume();
+    }, 1400);
+  }
 
   showResult({ win, playerScore, enemyScore }) {
     this.resultTitle.textContent = win ? 'VICTORY' : 'DEFEAT';
@@ -309,6 +338,31 @@ export class Overlay {
   }
   openSettings() { this._buildSettings(); this._show(this.settingsModal); }
   openControls() { this._show(this.controls); }
+
+  openStats() {
+    const s = this.getStats();
+    const ses = s.session || {}, life = s.lifetime || {};
+    const kd = (k, d) => (d > 0 ? (k / d).toFixed(2) : String(k || 0));
+    const rows = [
+      ['Kills', ses.kills ?? 0, life.kills ?? 0],
+      ['Deaths', ses.deaths ?? 0, life.deaths ?? 0],
+      ['K / D', kd(ses.kills, ses.deaths), kd(life.kills, life.deaths)],
+      ['Best streak', ses.best ?? 0, life.bestStreak ?? 0],
+      ['Accuracy', (ses.accuracy ?? 0) + '%', (life.accuracy ?? 0) + '%'],
+      ['Headshot %', (ses.hsPct ?? 0) + '%', (life.hsPct ?? 0) + '%'],
+      ['Shots', ses.shots ?? 0, life.shots ?? 0],
+      ['Duels won', '—', life.wins ?? 0],
+      ['Duels lost', '—', life.losses ?? 0],
+    ];
+    this.statsPanel.innerHTML =
+      '<h2>STATS</h2>' +
+      '<div class="stats-grid"><div class="sg-head"></div><div class="sg-head">Session</div><div class="sg-head life">Lifetime</div>' +
+      rows.map(([l, a, b]) => `<div class="sg-label">${l}</div><div class="sg-val">${a}</div><div class="sg-val life">${b}</div>`).join('') +
+      '</div>';
+    this.statsPanel.appendChild(this._btn('RESET LIFETIME', 'secondary', () => { this.onResetLifetime(); this.openStats(); }));
+    this.statsPanel.appendChild(this._btn('BACK', 'secondary', () => this.showPause()));
+    this._show(this.statsModal);
+  }
   openPatchNotes() { this._show(this.patchnotes); }
 
   openBuyMenu() {
@@ -331,7 +385,10 @@ export class Overlay {
 
   hideAll() {
     window.removeEventListener('keydown', this._buyKeyHandler);
-    for (const m of [this.start, this.pause, this.settingsModal, this.controls, this.buymenu, this.patchnotes, this.result]) {
+    window.removeEventListener('keydown', this._pauseKeyHandler);
+    this._pauseEscReady = false;
+    clearTimeout(this._resumeRetry);
+    for (const m of [this.start, this.pause, this.settingsModal, this.controls, this.buymenu, this.patchnotes, this.result, this.statsModal]) {
       m.classList.remove('show');
     }
     this.current = null;

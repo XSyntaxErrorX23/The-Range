@@ -181,7 +181,7 @@ export class EnemyAgent {
       const dmg = head ? Math.min(160, Math.round(base * this.weapon.headshotMult)) : base;
       this.onDamagePlayer(dmg, head);
     }
-    bus.emit(EV.ENEMY_FIRED, { from: this._from.clone(), to: this._to.clone(), hit });
+    bus.emit(EV.ENEMY_FIRED, { from: this._from.clone(), to: this._to.clone(), hit, weapon: this.weapon });
   }
 
   _hitChance(dist) {

@@ -3,7 +3,7 @@ import { setupLights } from './lights.js';
 import { Scoreboard } from './scoreboard.js';
 import {
   canvasTexture, concreteCanvas, plasterCanvas, woodCanvas,
-  metalCanvas, crateCanvas, bumpCanvas,
+  metalCanvas, crateCanvas, bumpCanvas, accuracyTargetCanvas, rulerCanvas,
 } from './textures.js';
 
 /**
@@ -42,6 +42,12 @@ export class Range {
     this.group.add(this.arenaGroup);
     this.layout = 'practice';
 
+    // animated "life" (updated each frame via update())
+    this._fans = [];
+    this._flickers = [];
+    this._beacons = [];
+    this._lifeT = 0;
+
     // procedural textures (shared bump canvas, wrapped per-surface)
     const bump = bumpCanvas();
     this.mat = {
@@ -77,6 +83,7 @@ export class Range {
     this._buildTrusses();
     this._buildPillars();
     this._buildLightFixtures();
+    this._buildLife();
     // practice-range props (hidden in skirmish)
     this._curLayer = 'practice';
     this._buildFloorMarkings();
@@ -86,6 +93,7 @@ export class Range {
     this._buildTargetZone();
     this._buildCrates();
     this._buildParkour();
+    this._buildAccuracyTarget();
     // symmetrical 1v1 arena (hidden in practice)
     this._curLayer = 'arena';
     this._buildArena();
@@ -108,10 +116,11 @@ export class Range {
     this.colliderMeshes = L.base.occ.concat(L[name].occ);
   }
 
-  _add(mesh, { collide = false, occlude = false, solid = false } = {}, layer) {
+  _add(mesh, { collide = false, occlude = false, solid = false, penetrable = false } = {}, layer) {
     const lyr = layer || this._curLayer || 'base';
     const parent = lyr === 'practice' ? this.practiceGroup : lyr === 'arena' ? this.arenaGroup : this.group;
     parent.add(mesh);
+    if (penetrable) mesh.userData.penetrable = true; // shootable-through light cover
     const L = this._layer[lyr];
     if (occlude) L.occ.push(mesh);
     if (solid) L.solids.push(mesh);
@@ -239,7 +248,8 @@ export class Range {
 
   _buildProps() {
     const ringMat = this.mat.accent;
-    const positions = [[-6, -1.5], [6, -1.5], [-15, 13], [15, 19], [-15, 31], [16, 33]];
+    // (right-side barrels removed — that lane is now the accuracy range)
+    const positions = [[-6, -1.5], [6, -1.5], [-15, 13], [-15, 22], [-15, 31]];
     for (const [x, z] of positions) {
       const barrel = this._cyl(0.34, 0.36, 1.1, x, 0.55, z, this.mat.metal, 18);
       barrel.castShadow = true; barrel.receiveShadow = true;
@@ -289,7 +299,7 @@ export class Range {
       const crate = this._box(s, 1, s, x, y, z, this.mat.crate);
       crate.castShadow = true;
       crate.receiveShadow = true;
-      this._add(crate, { collide: true, occlude: true, solid: true });
+      this._add(crate, { collide: true, occlude: true, solid: true, penetrable: true });
     }
   }
 
@@ -307,7 +317,7 @@ export class Range {
     for (const [x, z, w, top, d] of defs) {
       const m = this._box(w, top, d, x, top / 2, z, c);
       m.castShadow = true; m.receiveShadow = true;
-      this._add(m, { collide: true, occlude: true, solid: true });
+      this._add(m, { collide: true, occlude: true, solid: true, penetrable: true });
     }
     // a teal pad marking the launch box
     this._add(this._box(2.2, 0.04, 2.2, -18, 1.62, 14, this.mat.accent), { solid: true });
@@ -327,7 +337,7 @@ export class Range {
     const cover = (x, z, w, h, d, mat) => {
       const m = this._box(w, h, d, x, h / 2, z, mat);
       m.castShadow = true; m.receiveShadow = true;
-      this._add(m, { collide: true, solid: true, occlude: true });
+      this._add(m, { collide: true, solid: true, occlude: true, penetrable: true });
     };
     // place a cover piece + its mirrors across x=0 and z=CZ (4-fold symmetry)
     const sym = (x, z, w, h, d, mat = crate) => {
@@ -336,12 +346,13 @@ export class Range {
       for (const sx of xs) for (const sz of zs) cover(sx, sz, w, h, d, mat);
     };
 
-    sym(0, CZ, 1.6, 2.2, 1.6, metal);       // centre pillar
-    sym(5.5, CZ, 1.2, 1.3, 3.4, crate);     // mid flank blocks
-    sym(8.6, 10.5, 1.5, 1.5, 1.5, crate);   // quadrant crates
-    sym(12.6, 12, 1.0, 1.9, 4.2, wall);     // tall side walls
-    sym(4.2, 7.5, 1.9, 1.0, 1.9, crate);    // low cover near spawns
-    sym(11.2, 6.5, 1.4, 1.4, 1.4, crate);   // corner crates
+    // NOTE: keep the centre line clear of tall blockers — both fighters spawn
+    // near x=0, so a tall centre pillar would eat every straight-on shot.
+    sym(0, CZ, 2.4, 0.85, 1.8, metal);      // LOW centre block: shoot over it, crouch behind
+    sym(7.5, 12, 1.5, 1.5, 1.5, crate);     // quadrant crates (off the centre lane)
+    sym(13, 11, 1.0, 2.0, 4.6, wall);       // tall side walls pushed to the edges
+    sym(4.5, 7.5, 1.9, 0.95, 1.9, crate);   // low near-spawn cover
+    sym(11, 23, 1.4, 1.5, 1.4, crate);      // mid-field crates
 
     // barrels flanking the centre
     const barrel = (x, z) => {
@@ -364,5 +375,140 @@ export class Range {
 
     // centre accent ring on the floor
     this._add(this._cyl(3.4, 3.4, 0.04, 0, 0.02, CZ, this.mat.accent, 40), { solid: true });
+  }
+
+  /** A scored accuracy bullseye on a stand, plus a distance ruler — like the
+   *  Valorant range accuracy station. The disc face is tagged for the firing
+   *  raycast (userData.accuracyTarget + scoring rings). Practice layer only. */
+  _buildAccuracyTarget() {
+    const metal = this.mat.metal;
+    const cx = 17, cy = 1.75; // dedicated lane on the right, clear of the bot lanes
+    const FIRE_Z = 0.5;
+    this._targetCx = cx;
+    this._targetFireZ = FIRE_Z;
+
+    // movable station (disc + plate + legs + base) — parts at LOCAL coords so the
+    // whole group can be slid downrange. Solid (shootable) but not collidable, so
+    // there are no stale collision boxes when it moves.
+    const station = new THREE.Group();
+    this.practiceGroup.add(station);
+    this._targetStation = station;
+    const stationSolid = (mesh, occlude = false) => {
+      station.add(mesh);
+      this._layer.practice.solids.push(mesh);
+      if (occlude) this._layer.practice.occ.push(mesh);
+    };
+
+    stationSolid(this._box(2.8, 0.22, 1.0, 0, 0.11, 0.16, metal));     // base
+    stationSolid(this._box(0.18, cy, 0.18, -1.1, cy / 2, 0.21, metal)); // legs
+    stationSolid(this._box(0.18, cy, 0.18, 1.1, cy / 2, 0.21, metal));
+    const plate = this._box(2.9, 2.9, 0.22, 0, cy, 0.13, metal);
+    plate.castShadow = true; plate.receiveShadow = true;
+    stationSolid(plate, true);
+
+    const tex = canvasTexture(accuracyTargetCanvas(), 1, 1);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.2, 48), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.05 }));
+    disc.position.set(0, cy, 0);
+    disc.rotation.y = Math.PI; // face the firing line (-Z)
+    disc.userData.accuracyTarget = true;
+    disc.userData.center = new THREE.Vector3(cx, cy, 0); // x,y used for scoring (z ignored — only z moves)
+    disc.userData.rings = [[0.12, 100], [0.30, 75], [0.55, 50], [0.85, 25], [1.2, 10]];
+    stationSolid(disc);
+
+    // distance control panel near the firing line (ruler board + shootable buttons),
+    // so you can pick a range right where you stand (Valorant-style).
+    const panelX = 13, panelZ = 2.5;
+    const rtex = canvasTexture(rulerCanvas(), 1, 1);
+    const board = this._box(0.55, 2.7, 0.08, panelX, 1.5, panelZ);
+    board.material = new THREE.MeshStandardMaterial({ map: rtex, roughness: 0.8 });
+    board.rotation.y = Math.PI;
+    this._add(board, { collide: true, solid: true });
+    this._add(this._box(0.12, 1.5, 0.12, panelX, 0.75, panelZ + 0.07, metal), { collide: true, solid: true });
+
+    // shootable distance buttons (aligned with the ruler labels) — shoot to move the target
+    this._rangeButtons = [];
+    const dists = [5, 10, 20, 30, 40];
+    const ys = [2.64, 2.29, 1.94, 1.595, 1.247];
+    for (let i = 0; i < dists.length; i++) {
+      const mat = new THREE.MeshStandardMaterial({ color: 0x46e0d6, emissive: 0x123c39, emissiveIntensity: 0.6, roughness: 0.5, metalness: 0.3 });
+      const btn = this._box(0.28, 0.28, 0.08, panelX - 0.5, ys[i], panelZ - 0.08, mat);
+      btn.userData.rangeButton = dists[i];
+      this._add(btn, { solid: true });
+      this._rangeButtons.push({ mat, distance: dists[i] });
+    }
+
+    this.setTargetDistance(20); // default 20m + highlights the active button
+  }
+
+  /** Slide the accuracy target to a distance (metres from the firing line) and
+   *  highlight the matching shootable button. */
+  setTargetDistance(d) {
+    if (this._targetStation) this._targetStation.position.set(this._targetCx, 0, this._targetFireZ + d);
+    if (this._rangeButtons) {
+      for (const b of this._rangeButtons) {
+        const on = b.distance === d;
+        b.mat.emissive.setHex(on ? 0x46e0d6 : 0x123c39);
+        b.mat.emissiveIntensity = on ? 1.1 : 0.5;
+      }
+    }
+    this._targetDistance = d;
+  }
+
+  /** Animated decoration: spinning ceiling fans, flickering wall lamps, pulsing
+   *  accent beacons. Purely visual (added straight to the base group). */
+  _buildLife() {
+    const fanMat = this.mat.metal;
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.6, metalness: 0.4 });
+    for (const z of [4, 16, 28]) {
+      const fan = new THREE.Group();
+      fan.position.set(0, 6.55, z);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8), fanMat);
+      rod.position.y = 0.25;
+      fan.add(rod);
+      fan.add(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.12, 12), fanMat));
+      const blades = new THREE.Group();
+      for (let i = 0; i < 4; i++) {
+        const a = i * (Math.PI / 2);
+        const bm = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.04, 0.34), bladeMat);
+        bm.position.set(Math.cos(a) * 0.95, 0, Math.sin(a) * 0.95);
+        bm.rotation.y = a;
+        bm.castShadow = true;
+        blades.add(bm);
+      }
+      fan.add(blades);
+      this.group.add(fan);
+      this._fans.push({ blades, speed: 2.0 + Math.random() * 1.6 });
+    }
+
+    // flickering wall lamps (each its own material to flicker independently)
+    for (const [x, z] of [[-24.4, 10], [24.4, 24], [-24.4, 34]]) {
+      const mat = new THREE.MeshStandardMaterial({ color: 0xfff4d8, emissive: 0xffe6b0, emissiveIntensity: 1.0, roughness: 0.5 });
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.7, 0.7), mat);
+      lamp.position.set(x, 3.4, z);
+      this.group.add(lamp);
+      this._flickers.push({ mat, base: 1.0, rate: 0.5 });
+    }
+
+    // pulsing accent beacons up on the pillars
+    for (const [x, z] of [[-22.5, 18], [22.5, 18], [-22.5, 6], [22.5, 30]]) {
+      const mat = new THREE.MeshStandardMaterial({ color: 0x46e0d6, emissive: 0x46e0d6, emissiveIntensity: 1.0, roughness: 0.4, metalness: 0.3 });
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), mat);
+      beacon.position.set(x, 6.2, z);
+      this.group.add(beacon);
+      this._beacons.push({ mat, base: 1.2, freq: 2.2 + Math.random(), phase: Math.random() * 6.28 });
+    }
+  }
+
+  /** Advance animated map life. Called each frame by Game. */
+  update(dt) {
+    this._lifeT += dt;
+    for (const f of this._fans) f.blades.rotation.y += f.speed * dt;
+    for (const fl of this._flickers) {
+      if (Math.random() < fl.rate * dt) fl.mat.emissiveIntensity = 0.15 + Math.random() * 0.35;
+      else fl.mat.emissiveIntensity += (fl.base - fl.mat.emissiveIntensity) * Math.min(1, dt * 6);
+    }
+    for (const b of this._beacons) {
+      b.mat.emissiveIntensity = b.base * (0.45 + 0.55 * Math.sin(this._lifeT * b.freq + b.phase));
+    }
   }
 }

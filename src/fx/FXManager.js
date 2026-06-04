@@ -164,6 +164,18 @@ export class FXManager {
     d.life = 0.7;
   }
 
+  /** Floating accuracy-target score (cyan; gold for a bullseye). */
+  scoreNumber(point, score) {
+    if (!this.dmgLayer) return;
+    const d = this.dmgNums[this._dmgI];
+    this._dmgI = (this._dmgI + 1) % this.dmgNums.length;
+    d.world.copy(point);
+    d.el.textContent = '+' + score;
+    d.el.className = 'dmgnum score' + (score >= 100 ? ' bull' : '');
+    d.el.style.display = 'block';
+    d.life = 0.9;
+  }
+
   // ---------- update ----------
   update(dt) {
     for (const t of this.tracers) {
@@ -220,5 +232,6 @@ export class FXManager {
     });
     bus.on(EV.COMBAT_SLASH, ({ point, normal }) => this.scratch(point, normal));
     bus.on(EV.ENEMY_FIRED, ({ from: f, to }) => this.tracer(f, to)); // incoming shot tracer
+    bus.on(EV.ACCURACY_SCORE, ({ score, point }) => this.scoreNumber(point, score));
   }
 }

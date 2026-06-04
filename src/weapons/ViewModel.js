@@ -35,6 +35,7 @@ export class ViewModel {
     this.kick = 0;
     this.reloadT = 0; this.reloadDur = 0;
     this.swingT = 0;
+    this.inspectT = 0; this.inspectDur = 2.1;
     this.bobPhase = 0;
     this.swayX = 0; this.swayY = 0;
   }
@@ -49,17 +50,18 @@ export class ViewModel {
     const key = this.models[id] ? id : modelKeyFor(id);
     if (this.currentKey && this.models[this.currentKey]) this.models[this.currentKey].visible = false;
     this.currentKey = key;
-    this.kick = 0; this.reloadT = 0; this.swingT = 0;
+    this.kick = 0; this.reloadT = 0; this.swingT = 0; this.inspectT = 0;
     this._applyVisibility();
   }
 
   setVisible(visible) { this.hidden = !visible; this._applyVisibility(); }
   setScopedHidden(hidden) { this.scopedHidden = hidden; this._applyVisibility(); }
-  setADS(isADS) { this.isADS = isADS; }
+  setADS(isADS) { this.isADS = isADS; if (isADS) this.inspectT = 0; }
 
-  triggerKick(amount = 1) { this.kick = Math.min(1.4, this.kick + amount); }
-  triggerReload(dur) { this.reloadT = dur; this.reloadDur = dur; }
+  triggerKick(amount = 1) { this.kick = Math.min(1.4, this.kick + amount); this.inspectT = 0; }
+  triggerReload(dur) { this.reloadT = dur; this.reloadDur = dur; this.inspectT = 0; }
   triggerSwing() { this.swingT = 0.25; }
+  triggerInspect() { if (!this.isADS) this.inspectT = this.inspectDur; }
 
   update(dt, motion = {}) {
     if (!this.currentKey) return;
@@ -101,15 +103,30 @@ export class ViewModel {
       swingPos = -0.14 * s;
     }
 
+    // inspect: tilt the muzzle up to show the top, hold, then drop back down
+    let inspRX = 0, inspRY = 0, inspRZ = 0, inspPX = 0, inspPY = 0, inspPZ = 0;
+    if (this.inspectT > 0) {
+      this.inspectT = Math.max(0, this.inspectT - dt);
+      const p = 1 - this.inspectT / this.inspectDur; // 0..1
+      // trapezoid envelope: ease up -> hold -> ease down
+      let env = Math.min(Math.min(1, p / 0.22), Math.min(1, (1 - p) / 0.28));
+      env = env * env * (3 - 2 * env); // smoothstep the edges
+      inspRX = 0.6 * env;   // pitch the muzzle up (~35°)
+      inspRY = 0.26 * env;  // slight yaw to angle it (~15°)
+      inspRZ = 0.12 * env;  // small roll
+      inspPY = 0.05 * env;  // lift it up
+      inspPZ = 0.15 * env;  // pull closer to the camera
+    }
+
     model.position.set(
-      this.basePos.x + bobX + this.swayX,
-      this.basePos.y + bobY + this.swayY + reloadDip,
-      this.basePos.z + this.kick * 0.13 + swingPos
+      this.basePos.x + bobX + this.swayX + inspPX,
+      this.basePos.y + bobY + this.swayY + reloadDip + inspPY,
+      this.basePos.z + this.kick * 0.13 + swingPos + inspPZ
     );
     model.rotation.set(
-      -this.kick * 0.2 + reloadRot + swingRot - this.swayY * 1.5,
-      -this.swayX * 1.5,
-      0
+      -this.kick * 0.2 + reloadRot + swingRot - this.swayY * 1.5 + inspRX,
+      -this.swayX * 1.5 + inspRY,
+      inspRZ
     );
   }
 }

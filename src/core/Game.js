@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { Engine } from './Engine.js';
 import { Loop } from './Loop.js';
 import { ScoreManager } from './ScoreManager.js';
@@ -105,7 +106,47 @@ export class Game {
     this._wireLock();
     this._wireSettings();
 
-    this.loop = new Loop({ step: (dt) => this._step(dt), render: () => this.engine.render() });
+    // shoot a distance button -> slide the accuracy target to that range
+    bus.on(EV.RANGE_DISTANCE, ({ distance }) => this.world.setTargetDistance(distance));
+
+    this._stepT = 0; // footstep cadence timer
+
+    // Cinematic menu camera: a slow flythrough of the map behind the menus.
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    this._cineWaypoints = [
+      { pos: V(0, 6.2, -9), look: V(0, 1.2, 26) },    // overview down the lanes
+      { pos: V(-13, 2.8, 14), look: V(6, 1.0, 27) },  // sweep across the crates
+      { pos: V(8, 2.0, 6), look: V(17, 1.7, 26) },    // the accuracy lane
+      { pos: V(18, 5.0, 0), look: V(2, 1.5, 30) },    // high over the right side
+      { pos: V(-21, 4.5, 8), look: V(-15, 1.2, 20) }, // the parkour course
+      { pos: V(6, 4.5, 42), look: V(0, 4.6, 30) },    // up at the scoreboard
+    ];
+    this._cineT = 0;
+    this._cineActive = true; // start-screen flythrough until first lock
+    this._hasPlayed = false; // once true, pausing stays static (no flythrough)
+    this._cinePos = new THREE.Vector3();
+    this._cineLook = new THREE.Vector3();
+
+    this.loop = new Loop({
+      step: (dt) => this._step(dt),
+      render: (alpha, dt) => { if (this._cineActive) this._cineUpdate(dt); this.engine.render(); },
+    });
+  }
+
+  /** Glide the camera between waypoints (eased), looping — runs while menus are up. */
+  _cineUpdate(dt) {
+    const wps = this._cineWaypoints;
+    const SEG = 5.5; // seconds per leg
+    this._cineT += dt;
+    const total = this._cineT / SEG;
+    const idx = Math.floor(total) % wps.length;
+    const next = (idx + 1) % wps.length;
+    let f = total - Math.floor(total);
+    f = f * f * (3 - 2 * f); // smoothstep ease
+    this._cinePos.lerpVectors(wps[idx].pos, wps[next].pos, f);
+    this._cineLook.lerpVectors(wps[idx].look, wps[next].look, f);
+    this.engine.camera.position.copy(this._cinePos);
+    this.engine.camera.lookAt(this._cineLook);
   }
 
   _applyInitialSettings() {
@@ -126,6 +167,8 @@ export class Game {
     this.overlay.onBuy = (id) => this.weapons.setLoadout(id);
     this.overlay.getLoadout = () => ({ primaryId: this.weapons.primaryId, sidearmId: this.weapons.sidearmId });
     this.overlay.onReset = () => this.score.reset();
+    this.overlay.getStats = () => this.score.getStats();
+    this.overlay.onResetLifetime = () => this.score.resetLifetime();
     this.overlay.onRematch = () => { this.skirmish.rematch(); this.input.requestLock(); };
     this.overlay.onExitSkirmish = () => { this.settings.set('botMode', 'static'); this.input.requestLock(); };
 
@@ -154,11 +197,17 @@ export class Game {
 
     bus.on(EV.LOCK_CHANGE, ({ locked }) => {
       if (locked) {
+        this._hasPlayed = true;
+        this._cineActive = false; // gameplay drives the camera now
+        this.viewModel.setVisible(this.cameraRig.mode === 'first');
         this.loop.resume();
         this.overlay.hideAll();
         this.hud.show();
         if (this.touch) this.touch.show();
       } else {
+        // flythrough only on the first start screen; pausing stays static
+        this._cineActive = !this._hasPlayed;
+        this.viewModel.setVisible(!this._cineActive && this.cameraRig.mode === 'first');
         this.loop.pause();
         if (this.touch) this.touch.hide();
         if (!this.overlay.anyOpen()) this.overlay.showPause();
@@ -197,6 +246,7 @@ export class Game {
 
   start() {
     this.hud.hide();
+    this.viewModel.setVisible(false); // hidden during the menu flythrough
     this.overlay.showStart();
     this.loop.start(); // runs RAF; simulation stays paused until first lock
   }
@@ -220,6 +270,10 @@ export class Game {
     if (this.input.pressed('RANGE_SETTINGS')) {
       this.overlay.openSettings();
       this.input.exitLock();
+    }
+    if (this.input.pressed('INSPECT') && !this.weapons.isBusy()) {
+      this.viewModel.triggerInspect();
+      this.audio.inspect();
     }
 
     // skirmish round logic (enemy AI, scoring); freezes the player between rounds
@@ -255,8 +309,8 @@ export class Game {
     this.player.position.addScaledVector(this.player.velocity, dt); // integrate
     resolveCollision(this.player, this.world);
     this.weapons.update(dt);
+    this.bots.update(dt); // rebuild the shootable target list BEFORE firing this frame
     if (!frozen && !this.radio.active) this.firing.update(dt);
-    this.bots.update(dt);
     // animate gun (pose/ADS/recoil kick/reload/swing + bob & look sway)
     this.viewModel.update(dt, {
       speed: Math.hypot(this.player.velocity.x, this.player.velocity.z),
@@ -264,6 +318,19 @@ export class Game {
       lookDY: this.input.mouseDY,
     });
     this.cameraRig.updateTransform(dt); // position camera after the player has moved
+
+    // blind the screen when the camera is inside a smoke cloud
+    this.hud.setSmoke(this.abilities.visionObscure(this.engine.camera.position));
+
+    this.world.update(dt); // animated map life (fans, flickering lights)
+    // footstep audio while running on the ground
+    const psp = Math.hypot(this.player.velocity.x, this.player.velocity.z);
+    if (!frozen && this.player.grounded && psp > 1.8) {
+      this._stepT -= dt;
+      if (this._stepT <= 0) { this.audio.footstep(); this._stepT = Math.max(0.27, 0.52 - psp * 0.03); }
+    } else {
+      this._stepT = 0;
+    }
 
     this.minimap.update();
     this.hud.update(dt);

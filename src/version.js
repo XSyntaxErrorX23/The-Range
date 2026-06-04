@@ -1,7 +1,20 @@
 // Game version + patch notes (shown on the welcome screen).
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 
 export const PATCH_NOTES = [
+  {
+    version: '0.4.0',
+    date: '2026-06-04',
+    title: 'Arena Update',
+    notes: [
+      'Skirmish 1v1 mode — duel a combat AI on a symmetrical arena, first to 5. Pick the mode on the start screen.',
+      'Unique model for every weapon, plus enemies that hold their gun. Classic right-click 3-round burst.',
+      'Spray patterns — automatic weapons now follow a fixed, learnable recoil pattern.',
+      'Audio pass — punchier per-weapon fire, 3-stage reloads, footsteps and muffled enemy fire.',
+      'Minimap radar, radio comms wheel (`), weapon weight affecting move speed, and a Stats screen.',
+      'Map life — spinning fans, flickering lamps, pulsing beacons. Mobile touch controls.',
+    ],
+  },
   {
     version: '0.3.0',
     date: '2026-06-03',

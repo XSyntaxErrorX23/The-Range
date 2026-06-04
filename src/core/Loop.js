@@ -55,6 +55,6 @@ export class Loop {
     }
 
     const alpha = this.accumulator / this.fixedDt;
-    this.render(alpha);
+    this.render(alpha, frameTime); // frameTime lets menus animate while paused
   }
 }

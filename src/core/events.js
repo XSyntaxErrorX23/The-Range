@@ -48,6 +48,8 @@ export const EV = {
   COMBAT_KILL: 'combat:kill', // { bot }
   COMBAT_MISS: 'combat:miss', // { point, normal }
   COMBAT_SLASH: 'combat:slash', // melee hit a surface — { point, normal }
+  ACCURACY_SCORE: 'accuracy:score', // shot the range accuracy target — { score, point }
+  RANGE_DISTANCE: 'range:distance', // shot a distance button — { distance }
   PLAYER_HEALTH: 'player:health', // { health, armor, max }
   PLAYER_DEAD: 'player:dead', // { byHead }
   ENEMY_FIRED: 'enemy:fired', // skirmish AI shot — { from, to, hit }

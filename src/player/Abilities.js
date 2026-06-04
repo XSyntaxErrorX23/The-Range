@@ -111,6 +111,7 @@ export class Abilities {
     const mat = new THREE.MeshStandardMaterial({
       color: 0xe7edf2, roughness: 1, metalness: 0,
       transparent: true, opacity: 0, depthWrite: false,
+      side: THREE.DoubleSide, // render the inner surface too, so it reads as a volume from inside
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.copy(pos);
@@ -124,6 +125,22 @@ export class Abilities {
     this._spend(this.defs.ult);
     this.weapons.equipBlades();
     if (this.audio) this.audio.blade();
+  }
+
+  /** How much a point's vision is obscured by smoke (0 clear .. 1 blind). Used to
+   *  blind the player's screen when the camera is inside a cloud. */
+  visionObscure(point) {
+    let f = 0;
+    for (const s of this.smokes) {
+      const r = s.mesh.scale.x; // sphere geometry radius is 1, so scale == world radius
+      const d = point.distanceTo(s.mesh.position);
+      if (d < r) {
+        const depth = 1 - d / r;                 // 0 at the edge, 1 at the centre
+        const fade = s.mesh.material.opacity / 0.92; // current fade-in/out (0..1)
+        f = Math.max(f, Math.min(1, depth * 1.7) * fade);
+      }
+    }
+    return f;
   }
 
   _updateSmokes(dt) {

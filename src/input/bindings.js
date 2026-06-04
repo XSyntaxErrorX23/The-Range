@@ -21,6 +21,7 @@ export const BINDINGS = {
   TOGGLE_VIEW: ['KeyV'], // 1st <-> 3rd person
   RANGE_SETTINGS: ['F2'],
   RADIO: ['Backquote'], // ` — radio comms wheel
+  INSPECT: ['KeyY'], // inspect the equipped weapon
 };
 
 // Mouse buttons

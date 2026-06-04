@@ -1,9 +1,15 @@
 import * as THREE from 'three';
 import { bus, EV } from '../core/events.js';
 import { deg2rad } from '../util/math.js';
+import { sprayOffset, SPRAY_RESET } from './sprayPatterns.js';
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const WORLD_RIGHT = new THREE.Vector3(1, 0, 0);
+
+// Fraction of damage that passes through light cover (wallbang), by weapon class.
+// Heavier guns penetrate better; shotgun pellets mostly get stopped.
+const PEN_BY_CAT = { sniper: 0.8, mg: 0.6, rifle: 0.55, sidearm: 0.4, smg: 0.4, shotgun: 0.2, melee: 0, special: 0.5 };
+function penMult(w) { return PEN_BY_CAT[w.category] ?? 0.4; }
 
 /**
  * The act of shooting: fire-rate gating, spread cone, hitscan raycast with wall
@@ -22,6 +28,8 @@ export class FiringController {
 
     this.cooldown = 0;
     this._burst = null; // in-progress alt-fire burst { id, left, timer }
+    this._sprayIndex = 0; // shot index within the current automatic spray
+    this._sprayTimer = 999; // time since last shot (resets the pattern)
     this.raycaster = new THREE.Raycaster();
     this._origin = new THREE.Vector3();
     this._dir = new THREE.Vector3();
@@ -33,6 +41,7 @@ export class FiringController {
 
   update(dt) {
     if (this.cooldown > 0) this.cooldown -= dt;
+    this._sprayTimer += dt;
     if (this.player && !this.player.alive) { this._burst = null; return; } // dead in skirmish
 
     const wm = this.weapons;
@@ -82,7 +91,17 @@ export class FiringController {
       if (wm.ammo.mag <= 0) wm.revertFromBlades();
     } else {
       this.cameraRig.recoverLambda = Math.max(5, w.recoil.recoverPerSec * 60);
-      this.cameraRig.addRecoil(w.recoil.pitchPerShot, (Math.random() - 0.5) * w.recoil.yawJitter);
+      if (w.automatic) {
+        // continuous fire -> deterministic, learnable spray pattern
+        if (this._sprayTimer > SPRAY_RESET) this._sprayIndex = 0;
+        const sp = sprayOffset(w, this._sprayIndex++);
+        this.cameraRig.addRecoil(sp.pitch, sp.yaw);
+      } else {
+        // tap weapons: mostly vertical kick with a touch of random yaw
+        this.cameraRig.addRecoil(w.recoil.pitchPerShot, (Math.random() - 0.5) * w.recoil.yawJitter);
+        this._sprayIndex = 0;
+      }
+      this._sprayTimer = 0;
       this.viewModel.triggerKick(1);
     }
   }
@@ -142,6 +161,22 @@ export class FiringController {
     const pellets = w.pellets || 1;
     this._hits.clear();
 
+    // aggregate damage on a bot (zone multiplier + optional penetration multiplier)
+    const hitBot = (bh, mult) => {
+      const bot = bh.object.userData.bot;
+      const zone = bh.object.userData.hitZone || 'body';
+      if (!bot || !bot.alive) return;
+      const zmult = zone === 'head' ? w.headshotMult : zone === 'leg' ? (w.legMult || 1) : 1;
+      const dmg = Math.round(w.damage * zmult * mult);
+      const dead = bot.takeDamage(dmg, zone, bh.point);
+      let agg = this._hits.get(bot);
+      if (!agg) { agg = { dmg: 0, head: false, point: bh.point.clone(), dead: false }; this._hits.set(bot, agg); }
+      agg.dmg += dmg;
+      agg.head = agg.head || zone === 'head';
+      agg.dead = agg.dead || dead;
+      agg.point.copy(bh.point);
+    };
+
     for (let i = 0; i < pellets; i++) {
       this._jitter(this._dir, spread, this._jit);
       this.raycaster.set(this._origin, this._jit);
@@ -150,25 +185,30 @@ export class FiringController {
       const botHit = this.raycaster.intersectObjects(this.bots.targetList, false)[0] || null;
       const worldHit = this.raycaster.intersectObjects(this.world.solids, false)[0] || null;
 
+      // direct hit — no cover, or the bot is in front of it
       if (botHit && (!worldHit || botHit.distance <= worldHit.distance)) {
-        const bot = botHit.object.userData.bot;
-        const zone = botHit.object.userData.hitZone || 'body';
-        if (bot && bot.alive) {
-          const mult = zone === 'head' ? w.headshotMult : zone === 'leg' ? (w.legMult || 1) : 1;
-          const dmg = Math.round(w.damage * mult);
-          const dead = bot.takeDamage(dmg, zone, botHit.point);
-          let agg = this._hits.get(bot);
-          if (!agg) { agg = { dmg: 0, head: false, point: botHit.point.clone(), dead: false }; this._hits.set(bot, agg); }
-          agg.dmg += dmg;
-          agg.head = agg.head || zone === 'head';
-          agg.dead = agg.dead || dead;
-          agg.point.copy(botHit.point);
-          continue;
-        }
+        hitBot(botHit, 1);
+        continue;
       }
-      // pellet missed a bot -> wall/air impact (per pellet for spread visual)
+
       if (worldHit) {
-        bus.emit(EV.COMBAT_MISS, { point: worldHit.point.clone(), normal: worldHit.face ? worldHit.face.normal.clone() : null, from: this._origin.clone() });
+        const ud = worldHit.object.userData || {};
+        // distance buttons: register the range change, leave no impact/decal
+        if (ud.rangeButton != null) { bus.emit(EV.RANGE_DISTANCE, { distance: ud.rangeButton }); continue; }
+        // accuracy target: score it (spark only, no decal — it moves)
+        let movable = false;
+        if (ud.accuracyTarget) {
+          movable = true;
+          const r = Math.hypot(worldHit.point.x - ud.center.x, worldHit.point.y - ud.center.y);
+          let score = 0;
+          for (const [rr, sc] of ud.rings) { if (r <= rr) { score = sc; break; } }
+          if (score > 0) bus.emit(EV.ACCURACY_SCORE, { score, point: worldHit.point.clone() });
+        }
+        // penetration: a bot behind LIGHT cover takes reduced damage (wallbang)
+        if (botHit && ud.penetrable) hitBot(botHit, penMult(w));
+        // entry/surface impact (world-space normal so decals sit on rotated faces)
+        const wn = (!movable && worldHit.face) ? worldHit.face.normal.clone().transformDirection(worldHit.object.matrixWorld) : null;
+        bus.emit(EV.COMBAT_MISS, { point: worldHit.point.clone(), normal: wn, from: this._origin.clone() });
       } else if (pellets === 1) {
         bus.emit(EV.COMBAT_MISS, { point: this._origin.clone().addScaledVector(this._jit, w.range), normal: null, from: this._origin.clone() });
       }
@@ -204,11 +244,11 @@ export class FiringController {
       return;
     }
 
-    // hit a wall/box instead -> leave a scratch mark
+    // hit a wall/box instead -> leave a scratch mark (world-space normal)
     if (worldHit) {
       bus.emit(EV.COMBAT_SLASH, {
         point: worldHit.point.clone(),
-        normal: worldHit.face ? worldHit.face.normal.clone() : null,
+        normal: worldHit.face ? worldHit.face.normal.clone().transformDirection(worldHit.object.matrixWorld) : null,
       });
     }
   }

@@ -27,10 +27,37 @@ function box(w, h, d, x, y, z, mat) {
 }
 
 function cyl(rt, rb, len, x, y, z, mat, seg = 14) {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, len, seg), mat);
+  // smoother barrels/scopes — never below 18 sides
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, len, Math.max(seg, 18)), mat);
   m.rotation.x = Math.PI / 2; // axis along Z (forward/back)
   m.position.set(x, y, z);
   return m;
+}
+
+/** Shared detailing: a picatinny rail (base + teeth + accent strip), iron sights,
+ *  trigger + guard, ejection port and charging handle — bolts more poly/detail
+ *  onto the rifle silhouettes. */
+function detailRifle(g, accent = MAT.accent) {
+  g.add(box(0.04, 0.012, 0.34, 0, 0.064, -0.06, MAT.steel)); // rail base
+  for (let i = 0; i < 8; i++) g.add(box(0.034, 0.016, 0.02, 0, 0.078, -0.2 + i * 0.04, MAT.dark)); // teeth
+  g.add(box(0.016, 0.01, 0.18, 0, 0.086, -0.06, accent)); // accent strip
+  g.add(box(0.01, 0.052, 0.016, 0, 0.11, -0.44, MAT.dark)); // front sight post
+  g.add(box(0.05, 0.036, 0.022, 0, 0.1, 0.07, MAT.dark)); // rear sight block
+  g.add(box(0.016, 0.04, 0.024, 0, 0.108, 0.07, MAT.body)); // rear aperture
+  g.add(box(0.014, 0.035, 0.014, 0, -0.07, 0.04, MAT.steel)); // trigger
+  g.add(box(0.02, 0.014, 0.1, 0, -0.1, 0.06, MAT.dark)); // trigger guard
+  g.add(box(0.05, 0.045, 0.07, 0.05, 0.015, 0.0, MAT.dark)); // ejection port
+  g.add(box(0.02, 0.022, 0.07, 0.045, 0.06, 0.12, MAT.steel)); // charging handle
+}
+
+/** Shared pistol detailing: slide serrations, sights, trigger + guard. */
+function detailPistol(g, accent = MAT.accent) {
+  for (let i = 0; i < 5; i++) g.add(box(0.074, 0.02, 0.006, 0, 0.0, 0.05 + i * 0.013, MAT.dark)); // serrations
+  g.add(box(0.01, 0.02, 0.012, 0, 0.064, -0.15, MAT.dark)); // front sight
+  g.add(box(0.032, 0.018, 0.012, 0, 0.062, 0.07, MAT.dark)); // rear sight
+  g.add(box(0.012, 0.022, 0.014, 0, 0.07, -0.12, accent)); // accent front dot
+  g.add(box(0.01, 0.026, 0.01, 0, -0.045, -0.02, MAT.steel)); // trigger
+  g.add(box(0.014, 0.01, 0.07, 0, -0.075, 0.0, MAT.dark)); // trigger guard
 }
 
 function scope(g, { x = 0, y = 0.12, z = -0.06, r = 0.034, len = 0.28 } = {}) {
@@ -59,7 +86,7 @@ export function buildWeaponModel(id) {
       g.add(box(0.07, 0.105, 0.27, 0, 0, -0.02, body));
       g.add(cyl(0.017, 0.017, 0.1, 0, 0, -0.2, steel, 10));
       pistolGrip(g, { y: -0.12, z: 0.05 });
-      g.add(box(0.012, 0.028, 0.028, 0, 0.066, -0.11, accent));
+      detailPistol(g, accent);
       break;
     case 'shorty':
       g.add(box(0.085, 0.1, 0.2, 0, 0, 0.0, body));
@@ -134,7 +161,7 @@ export function buildWeaponModel(id) {
       g.add(box(0.05, 0.16, 0.085, 0, -0.13, 0.02, dark));
       pistolGrip(g, { y: -0.09, z: 0.16 });
       stock(g, { z: 0.2, h: 0.08, d: 0.18 });
-      g.add(box(0.016, 0.045, 0.18, 0, 0.082, -0.06, accent));
+      detailRifle(g, accent);
       break;
     case 'guardian':
       g.add(box(0.07, 0.1, 0.5, 0, 0, -0.12, body));
@@ -150,7 +177,7 @@ export function buildWeaponModel(id) {
       g.add(box(0.05, 0.18, 0.085, 0, -0.14, 0.02, dark));
       pistolGrip(g, { y: -0.09, z: 0.16 });
       stock(g, { z: 0.22 });
-      g.add(box(0.018, 0.05, 0.2, 0, 0.085, -0.08, accent));
+      detailRifle(g, accent);
       break;
     case 'vandal':
       g.add(box(0.08, 0.12, 0.55, 0, 0, -0.12, body));
@@ -160,7 +187,7 @@ export function buildWeaponModel(id) {
       g.add(box(0.05, 0.18, 0.09, 0, -0.14, 0.02, dark));
       pistolGrip(g, { y: -0.09, z: 0.16 });
       stock(g, { z: 0.22 });
-      g.add(box(0.018, 0.05, 0.2, 0, 0.085, -0.08, accent));
+      detailRifle(g, accent);
       break;
 
     // ------------------------------ snipers -----------------------------

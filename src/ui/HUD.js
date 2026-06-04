@@ -45,6 +45,11 @@ export class HUD {
   show() { this.root.classList.remove('hidden'); }
   hide() { this.root.classList.add('hidden'); }
 
+  /** Screen blind while the camera is inside a smoke (0..1). */
+  setSmoke(amount) {
+    this.smokescreen.style.opacity = String(Math.min(0.94, amount));
+  }
+
   _el(tag, cls, html) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -54,6 +59,10 @@ export class HUD {
 
   _build() {
     this.root.innerHTML = '';
+
+    // smoke blind (behind everything else in the HUD layer; fills the view inside a smoke)
+    this.smokescreen = this._el('div'); this.smokescreen.id = 'smokescreen';
+    this.root.appendChild(this.smokescreen);
 
     // crosshair
     this.crosshair = this._el('div');

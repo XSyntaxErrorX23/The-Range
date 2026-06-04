@@ -22,6 +22,13 @@ export class AudioManager {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.settings.volume ?? 0.7;
       this.master.connect(this.ctx.destination);
+      // muffled bus for incoming enemy fire (quieter + low-passed for "distance")
+      this.distant = this.ctx.createGain();
+      this.distant.gain.value = 0.5;
+      const dlp = this.ctx.createBiquadFilter();
+      dlp.type = 'lowpass';
+      dlp.frequency.value = 1500;
+      this.distant.connect(dlp).connect(this.master);
       this.noiseBuffer = this._makeNoise(1.0);
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
@@ -58,7 +65,7 @@ export class AudioManager {
     return { filt, g };
   }
 
-  _tone(type, freq, dur, peak, slideTo) {
+  _tone(type, freq, dur, peak, slideTo, dest) {
     const osc = this.ctx.createOscillator();
     osc.type = type;
     const g = this.ctx.createGain();
@@ -68,27 +75,38 @@ export class AudioManager {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(peak, t + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g).connect(this.master);
+    osc.connect(g).connect(dest || this.master);
     osc.start(t);
     osc.stop(t + dur + 0.02);
     osc.onended = () => { osc.disconnect(); g.disconnect(); };
   }
 
-  // weapon is the full weapon object (has .category)
-  gunshot(weapon) {
+  // weapon is the full weapon object (has .category). dest/scale let enemy fire
+  // route through the muffled "distant" bus.
+  gunshot(weapon, dest = this.master, scale = 1) {
     if (!this.ctx) return;
     const c = weapon && weapon.category;
+    const click = (f, p) => this._tone('square', f, 0.014, p * scale, f * 0.5, dest); // mechanical transient
     switch (c) {
-      case 'sidearm': this._noiseBurst(0.12, 'lowpass', 1800, 0.5); this._tone('square', 180, 0.08, 0.18, 90); break;
-      case 'smg': this._noiseBurst(0.07, 'lowpass', 2600, 0.35); this._tone('square', 240, 0.05, 0.12, 120); break;
-      case 'shotgun': this._noiseBurst(0.26, 'lowpass', 1100, 0.6); this._tone('sawtooth', 110, 0.22, 0.26, 55); break;
-      case 'rifle': this._noiseBurst(0.14, 'lowpass', 2000, 0.5); this._tone('sawtooth', 160, 0.10, 0.2, 70); break;
-      case 'sniper': this._noiseBurst(0.32, 'lowpass', 900, 0.6); this._tone('sawtooth', 90, 0.3, 0.28, 45); break;
-      case 'mg': this._noiseBurst(0.1, 'lowpass', 1700, 0.45); this._tone('sawtooth', 140, 0.08, 0.2, 80); break;
-      case 'special': this._tone('triangle', 1500, 0.1, 0.13, 600); this._tone('sine', 2200, 0.07, 0.06); break;
-      case 'melee': this._tone('triangle', 1200, 0.12, 0.14, 400); break;
-      default: this._noiseBurst(0.1, 'lowpass', 2000, 0.4);
+      case 'sidearm': click(1300, 0.09); this._noiseBurst(0.12, 'lowpass', 1900, 0.5 * scale, dest); this._tone('square', 180, 0.08, 0.18 * scale, 90, dest); break;
+      case 'smg': click(1500, 0.07); this._noiseBurst(0.06, 'lowpass', 2700, 0.34 * scale, dest); this._tone('square', 240, 0.05, 0.12 * scale, 120, dest); break;
+      case 'shotgun': click(850, 0.1); this._noiseBurst(0.28, 'lowpass', 1100, 0.62 * scale, dest); this._tone('sawtooth', 100, 0.24, 0.28 * scale, 50, dest); break;
+      case 'rifle': click(1400, 0.1); this._noiseBurst(0.14, 'lowpass', 2100, 0.5 * scale, dest); this._tone('sawtooth', 150, 0.11, 0.22 * scale, 68, dest); break;
+      case 'sniper': click(1100, 0.12); this._noiseBurst(0.34, 'lowpass', 900, 0.62 * scale, dest); this._tone('sawtooth', 85, 0.32, 0.3 * scale, 42, dest); this._tone('sine', 2600, 0.04, 0.06 * scale, 1500, dest); break;
+      case 'mg': click(1300, 0.09); this._noiseBurst(0.1, 'lowpass', 1700, 0.46 * scale, dest); this._tone('sawtooth', 130, 0.09, 0.22 * scale, 76, dest); break;
+      case 'special': this._tone('triangle', 1500, 0.1, 0.13 * scale, 600, dest); this._tone('sine', 2200, 0.07, 0.06 * scale, 0, dest); break;
+      case 'melee': this._tone('triangle', 1200, 0.12, 0.14 * scale, 400, dest); break;
+      default: this._noiseBurst(0.1, 'lowpass', 2000, 0.4 * scale, dest);
     }
+  }
+
+  /** Incoming enemy fire — same gun timbre, routed through the muffled bus. */
+  enemyFire(weapon) { this.gunshot(weapon, this.distant, 0.9); }
+
+  /** A soft footstep thud. */
+  footstep() {
+    if (!this.ctx) return;
+    this._noiseBurst(0.05, 'lowpass', 360, 0.07);
   }
 
   // ability cues
@@ -99,11 +117,14 @@ export class AudioManager {
 
   reload() {
     if (!this.ctx) return;
-    this._tone('square', 320, 0.05, 0.1, 220);
-    setTimeout(() => this._tone('square', 260, 0.06, 0.1, 180), 180);
+    this._tone('square', 300, 0.05, 0.1, 200);                              // mag release
+    setTimeout(() => { if (this.ctx) this._noiseBurst(0.05, 'lowpass', 1200, 0.12); }, 150); // mag out
+    setTimeout(() => { if (this.ctx) this._tone('square', 260, 0.06, 0.12, 170); }, 330);     // mag in
+    setTimeout(() => { if (this.ctx) this._tone('square', 540, 0.04, 0.1, 360); }, 470);      // charging handle
   }
 
   empty() { if (this.ctx) this._tone('square', 900, 0.04, 0.08, 700); }
+  inspect() { if (this.ctx) { this._noiseBurst(0.12, 'bandpass', 800, 0.05); this._tone('square', 230, 0.05, 0.05, 300); } }
   hit() { if (this.ctx) this._tone('sine', 760, 0.07, 0.12, 600); }
   headshot() { if (this.ctx) { this._tone('sine', 1180, 0.09, 0.16, 880); this._tone('triangle', 1760, 0.07, 0.08); } }
   kill() { if (this.ctx) { this._tone('sine', 520, 0.16, 0.18, 320); this._tone('square', 780, 0.1, 0.08, 520); } }
@@ -116,5 +137,9 @@ export class AudioManager {
     bus.on(EV.COMBAT_KILL, () => this.kill());
     bus.on('weapon:empty', () => this.empty());
     bus.on(EV.WEAPON_RELOAD, ({ reloading, progress }) => { if (reloading && progress === 0) this.reload(); });
+    bus.on(EV.ENEMY_FIRED, ({ weapon }) => this.enemyFire(weapon));
+    bus.on(EV.ACCURACY_SCORE, ({ score }) => {
+      if (this.ctx) this._tone('sine', 500 + score * 6, 0.07, 0.12, 700 + score * 8);
+    });
   }
 }
