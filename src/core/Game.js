@@ -13,6 +13,7 @@ import { resolveCollision } from '../player/collision.js';
 import { Range } from '../world/Range.js';
 import { Graveyard } from '../world/Graveyard.js';
 import { AimArena } from '../world/AimArena.js';
+import { RangeDrone, DroneField } from '../world/RangeDrone.js';
 import { setupLights } from '../world/lights.js';
 import { ViewModel } from '../weapons/ViewModel.js';
 import { WeaponManager } from '../weapons/WeaponManager.js';
@@ -89,6 +90,10 @@ export class Game {
       weapons: this.weapons,
       firing: this.firing,
     });
+
+    // flying bullseye drone (practice range moving target) + a field of pop-up drones
+    this.rangeDrone = new RangeDrone(this.engine.scene);
+    this.droneField = new DroneField(this.engine.scene, 6);
 
     // Aim trainer (gridshot) coordinator (dormant until bot mode === 'aim')
     this.aim = new AimTrainer({
@@ -261,6 +266,8 @@ export class Game {
   /** Switch mode: swap the active world + coordinator (range layouts / graveyard). */
   _setMode(mode) {
     this.bots.setMode(mode);
+    this.hud.hideModeBars(); // clear any lingering bar; the active mode re-shows its own
+    const practice = !['zombie', 'skirmish', 'aim'].includes(mode);
     if (mode === 'zombie') {
       this._ensureGraveyard();
       this._useWorld(this.graveyard);
@@ -286,6 +293,9 @@ export class Game {
       this.skirmish.deactivate();
       this.aim.deactivate();
     }
+    // the bullseye drones (wandering + pop-up field) only live in the practice range
+    if (practice) { this.rangeDrone.enable(this.range); this.droneField.enable(this.range); }
+    else { this.rangeDrone.disable(); this.droneField.disable(); }
   }
 
   _ensureGraveyard() {
@@ -301,6 +311,7 @@ export class Game {
    *  `this.world` live each step, so this is all that's needed. */
   _useWorld(world) {
     if (this.world && this.world !== world && this.world.group) this.world.group.visible = false;
+    if (this.fx && this.world !== world) this.fx.reset(); // clear decals so they don't bleed between maps
     this.world = world;
     if (world.group) world.group.visible = true;
     if (world.enter) world.enter(this.engine.scene, this.lights);
@@ -432,6 +443,8 @@ export class Game {
     resolveCollision(this.player, this.world);
     this.weapons.update(dt);
     this.bots.update(dt); // rebuild the shootable target list BEFORE firing this frame
+    this.rangeDrone.update(dt); // move the flying bullseye + sync its scoring centre
+    this.droneField.update(dt); // pop-up drones around the map
     if (!frozen && !this.radio.active) this.firing.update(dt);
     // animate gun (pose/ADS/recoil kick/reload/swing + bob & look sway)
     this.viewModel.update(dt, {

@@ -94,6 +94,14 @@ export class FXManager {
     this._decalI = 0;
   }
 
+  /** Clear all persistent FX (decals + any live tracers/impacts). Called on world swap
+   *  so bullet holes from one map don't bleed into the next. */
+  reset() {
+    for (const m of this.decals) m.visible = false;
+    for (const t of this.tracers) { t.line.visible = false; t.life = 0; }
+    for (const it of this.impacts) { it.mesh.visible = false; it.life = 0; }
+  }
+
   decal(point, normal) {
     if (!normal) return;
     const m = this.decals[this._decalI];

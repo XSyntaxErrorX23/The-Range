@@ -533,7 +533,53 @@ body.touch-mode #touch-ui { touch-action: none; }
 .welcome .subtitle { font-size: 1.4vh; margin-bottom: 1.2vh; }
 .welcome .version-badge { margin-bottom: 1vh; }
 .welcome .ign-row { margin: 1.2vh 0; }
-.welcome .btn.big { font-size: 2.1vh; padding: 1.4vh 3vw; }
+/* primary CTA — glowing gradient pill with an arrow */
+.welcome .btn.big {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7em;
+  font-size: 2vh;
+  letter-spacing: 0.16em;
+  padding: 1.5vh 3.4vw;
+  min-width: 24vw;
+  border-radius: 999px;
+  color: #042320;
+  background: linear-gradient(135deg, #6ff3e9 0%, var(--cyan) 48%, #23b6ab 100%);
+  box-shadow: 0 0 0 1px rgba(70, 224, 214, 0.45), 0 8px 26px -8px rgba(70, 224, 214, 0.6);
+  transition: transform 0.1s ease, box-shadow 0.18s ease, filter 0.12s;
+}
+.welcome .btn.big::after {
+  content: "\2192"; /* → */
+  font-size: 1.15em;
+  transition: transform 0.16s ease;
+}
+.welcome .btn.big:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.04);
+  box-shadow: 0 0 0 1px rgba(70, 224, 214, 0.85), 0 12px 34px -8px rgba(70, 224, 214, 0.85);
+}
+.welcome .btn.big:hover::after { transform: translateX(5px); }
+.welcome .btn.big:active { transform: translateY(0); }
+
+/* patch notes — quiet text link, not another box */
+.welcome .btn.secondary {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.35vh;
+  letter-spacing: 0.18em;
+  padding: 0.8vh 1vw;
+  margin-top: 0.2vh;
+  border-radius: 0;
+  transition: color 0.12s, letter-spacing 0.12s;
+}
+.welcome .btn.secondary:hover {
+  filter: none;
+  transform: none;
+  color: var(--cyan);
+  letter-spacing: 0.24em;
+}
 /* controls as two compact key/desc pairs per row (half the height) */
 .welcome .controls-grid {
   grid-template-columns: auto 1fr auto 1fr;
@@ -547,7 +593,7 @@ body.touch-mode #touch-ui { touch-action: none; }
 /* start-screen mode selector */
 .mode-row {
   display: flex;
-  gap: 1.2vw;
+  gap: 1vw;
   justify-content: center;
   margin: 1vh 0 2vh;
   flex-wrap: wrap;
@@ -556,9 +602,9 @@ body.touch-mode #touch-ui { touch-action: none; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4vh;
-  min-width: 15vw;
-  padding: 1.4vh 1.8vw;
+  gap: 0.5vh;
+  min-width: 12.5vw;
+  padding: 1.5vh 1.4vw;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--panel-line);
   border-radius: 6px;
@@ -566,10 +612,20 @@ body.touch-mode #touch-ui { touch-action: none; }
   transition: border-color 0.1s, background 0.1s, transform 0.06s;
 }
 .mode-btn:hover { transform: translateY(-2px); background: rgba(70, 224, 214, 0.08); }
+.mode-btn:hover .mode-icon { color: var(--cyan); }
 .mode-btn.sel { border-color: var(--cyan); background: rgba(70, 224, 214, 0.14); }
-.mode-btn .mode-title { font-size: 1.9vh; font-weight: 700; letter-spacing: 0.1em; color: var(--text); text-transform: uppercase; }
+.mode-btn .mode-icon {
+  color: var(--text-dim);
+  width: 3.4vh; height: 3.4vh;
+  margin-bottom: 0.2vh;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.1s;
+}
+.mode-btn .mode-icon svg { width: 100%; height: 100%; display: block; }
+.mode-btn.sel .mode-icon { color: var(--cyan); }
+.mode-btn .mode-title { font-size: 1.8vh; font-weight: 700; letter-spacing: 0.08em; color: var(--text); text-transform: uppercase; }
 .mode-btn.sel .mode-title { color: var(--cyan); }
-.mode-btn .mode-desc { font-size: 1.2vh; color: var(--text-dim); letter-spacing: 0.04em; }
+.mode-btn .mode-desc { font-size: 1.15vh; color: var(--text-dim); letter-spacing: 0.04em; }
 
 /* welcome IGN entry */
 .ign-row {

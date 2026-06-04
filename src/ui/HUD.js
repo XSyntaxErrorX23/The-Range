@@ -220,6 +220,15 @@ export class HUD {
     if (fill) fill.style.width = Math.max(0, Math.round(100 * s.enemyHealth / (s.enemyMax || 100))) + '%';
   }
 
+  /** Clear all mode status bars — called on every mode switch so none linger. */
+  hideModeBars() {
+    this.aimbar.classList.remove('show');
+    this.zombiebar.classList.remove('show');
+    this.duelbar.classList.remove('show');
+    this.enemyhp.classList.remove('show');
+    this.rangepanel.style.display = '';
+  }
+
   setAim(s) {
     this.aimbar.classList.toggle('show', !!s.active);
     this.rangepanel.style.display = s.active ? 'none' : '';
@@ -322,6 +331,7 @@ export class HUD {
   }
 
   setRangePanel(snap) {
+    if (this.aimbar && snap.botMode !== 'aim') this.aimbar.classList.remove('show'); // never linger outside aim mode
     document.getElementById('rp-mode').textContent = snap.botMode.toUpperCase();
     document.getElementById('rp-armor').textContent = snap.botArmor ? 'ENABLED' : 'DISABLED';
     document.getElementById('rp-ammo').textContent = snap.infiniteAmmo ? 'ENABLED' : 'DISABLED';

@@ -10,6 +10,14 @@ const BUY_ICON = {
   mg: '<svg viewBox="0 0 64 32"><path d="M2 11h58v8H24v7h-9v-7H2z M6 19h12v6H6z"/></svg>',
 };
 
+// Mode card icons (stroke SVGs, inherit colour via currentColor)
+const MODE_ICONS = {
+  practice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.2"/><path d="M5.5 20.5c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/></svg>',
+  skirmish: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="17" x2="4" y2="20"/><line x1="3" y1="19" x2="5" y2="21"/></svg>',
+  zombie: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="m12.5 17-.5-1-.5 1h1z"/><path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20"/></svg>',
+  aim: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+};
+
 const CONTROLS = [
   ['WASD', 'Move'], ['Shift', 'Walk'], ['Ctrl', 'Crouch'], ['Space', 'Jump'],
   ['Mouse', 'Look'], ['LMB', 'Fire'], ['RMB', 'Aim (ADS) / Classic burst'], ['R', 'Reload'],
@@ -88,7 +96,8 @@ export class Overlay {
       const b = document.createElement('button');
       b.className = 'mode-btn';
       b.dataset.mode = key;
-      b.innerHTML = `<span class="mode-title">${title}</span><span class="mode-desc">${desc}</span>`;
+      b.innerHTML = `<span class="mode-icon">${MODE_ICONS[key] || ''}</span>` +
+        `<span class="mode-title">${title}</span><span class="mode-desc">${desc}</span>`;
       b.addEventListener('click', () => { this.audio && this.audio.ui(); this._selectMode(key); });
       return b;
     };
