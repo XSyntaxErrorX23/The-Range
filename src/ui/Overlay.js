@@ -12,7 +12,7 @@ const BUY_ICON = {
 
 const CONTROLS = [
   ['WASD', 'Move'], ['Shift', 'Walk'], ['Ctrl', 'Crouch'], ['Space', 'Jump'],
-  ['Mouse', 'Look'], ['LMB', 'Fire'], ['RMB', 'Aim (ADS)'], ['R', 'Reload'],
+  ['Mouse', 'Look'], ['LMB', 'Fire'], ['RMB', 'Aim (ADS) / Classic burst'], ['R', 'Reload'],
   ['1 / 2 / 3', 'Primary / Pistol / Knife'], ['B', 'Armory (buy menu)'], ['Wheel', 'Cycle weapons'],
   ['C', 'Cloudburst (smoke)'], ['Q', 'Updraft'], ['E', 'Tailwind (dash)'], ['X', 'Blade Storm'],
   ['V', 'Toggle 1st/3rd person'], ['F2', 'Range settings'], ['Esc', 'Pause'],

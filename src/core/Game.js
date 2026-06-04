@@ -3,6 +3,7 @@ import { Loop } from './Loop.js';
 import { ScoreManager } from './ScoreManager.js';
 import { bus, EV } from './events.js';
 import { Input } from '../input/Input.js';
+import { TouchControls } from '../input/TouchControls.js';
 import { Player } from '../player/Player.js';
 import { PlayerController } from '../player/PlayerController.js';
 import { CameraRig } from '../player/CameraRig.js';
@@ -71,6 +72,15 @@ export class Game {
       audio: this.audio,
     });
 
+    // Mobile: on-screen touch controls (only when there's no mouse/pointer-lock)
+    this.touch = null;
+    if (this.input.touch) {
+      document.body.classList.add('touch-mode');
+      this.touch = new TouchControls(this.input);
+      const startHint = document.querySelector('#m-start .hint');
+      if (startHint) startHint.textContent = 'Tap to play · use the on-screen controls.';
+    }
+
     this._applyInitialSettings();
     this._wireOverlay();
     this._wireLock();
@@ -108,8 +118,10 @@ export class Game {
         this.loop.resume();
         this.overlay.hideAll();
         this.hud.show();
+        if (this.touch) this.touch.show();
       } else {
         this.loop.pause();
+        if (this.touch) this.touch.hide();
         if (!this.overlay.anyOpen()) this.overlay.showPause();
       }
     });

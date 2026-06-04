@@ -1,6 +1,28 @@
 import { BINDINGS, MOUSE } from './bindings.js';
 import { bus, EV } from '../core/events.js';
 
+// Every key code the game binds — used to suppress browser default actions
+// (page scroll, quick-find, and crucially Ctrl+R reload) while playing.
+const BOUND_CODES = new Set(Object.values(BINDINGS).flat());
+
+/**
+ * Touch device? `?touch=1` / `?touch=0` force it on/off (handy for desktop testing).
+ * Otherwise: a coarse pointer with NO fine pointer available — i.e. phones/tablets,
+ * but NOT touchscreen laptops (which have a mouse/trackpad and should use pointer lock).
+ */
+export function isTouchDevice() {
+  try {
+    const q = new URLSearchParams(location.search).get('touch');
+    if (q === '1') return true;
+    if (q === '0') return false;
+  } catch { /* ignore */ }
+  const mm = window.matchMedia;
+  if (mm) {
+    return mm('(any-pointer: coarse)').matches && !mm('(any-pointer: fine)').matches;
+  }
+  return 'ontouchstart' in window && navigator.maxTouchPoints > 0;
+}
+
 /**
  * Centralized input: keyboard + mouse state, per-frame edges, mouse-look
  * deltas, and the pointer-lock lifecycle (request on click, browser-owned Esc
@@ -24,9 +46,14 @@ export class Input {
     this.mouseDX = 0;
     this.mouseDY = 0;
 
+    // analog movement axis (touch joystick); x = strafe right+, y = forward+
+    this.moveX = 0;
+    this.moveY = 0;
+
     // accumulated wheel ticks (sign = direction); consumed per frame
     this._wheel = 0;
 
+    this.touch = isTouchDevice();
     this.locked = false;
 
     this._onKeyDown = this._onKeyDown.bind(this);
@@ -71,12 +98,44 @@ export class Input {
 
   // ---- pointer lock ----
   requestLock() {
+    // Touch has no pointer lock — drive the same lifecycle with a virtual lock.
+    if (this.touch) { this._setVirtualLock(true); return; }
     // Must be called from a user gesture (e.g. overlay click).
     if (this.dom.requestPointerLock) this.dom.requestPointerLock();
   }
 
   exitLock() {
+    if (this.touch) { this._setVirtualLock(false); return; }
     if (document.exitPointerLock) document.exitPointerLock();
+  }
+
+  /** Touch-mode stand-in for pointerlockchange: same edge-reset + LOCK_CHANGE. */
+  _setVirtualLock(locked) {
+    this.locked = locked;
+    this._clearAll();
+    this._prevKeys = new Set();
+    this._prevMouse.left = this._prevMouse.right = this._prevMouse.middle = false;
+    this._justPressed.clear();
+    this._justReleased.clear();
+    bus.emit(EV.LOCK_CHANGE, { locked });
+  }
+
+  // ---- touch injection API (driven by TouchControls) ----
+  holdKey(code) { this.keys.add(code); }
+  unholdKey(code) { this.keys.delete(code); }
+  setFire(on) { this.mouse.left = !!on; }
+  setADS(on) { this.mouse.right = !!on; }
+  addLook(dx, dy) { this.mouseDX += dx; this.mouseDY += dy; }
+  setMove(x, y) { this.moveX = x; this.moveY = y; }
+
+  /** Movement wish on the (forward, strafe) axes — analog on touch, digital on keys. */
+  wishVector() {
+    if (this.touch && (this.moveX !== 0 || this.moveY !== 0)) {
+      return { f: this.moveY, s: this.moveX };
+    }
+    const f = (this.isDown('MOVE_FORWARD') ? 1 : 0) - (this.isDown('MOVE_BACK') ? 1 : 0);
+    const s = (this.isDown('MOVE_RIGHT') ? 1 : 0) - (this.isDown('MOVE_LEFT') ? 1 : 0);
+    return { f, s };
   }
 
   _onLockChange() {
@@ -112,10 +171,22 @@ export class Input {
     // ignore typing in form fields (IGN entry, settings inputs)
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    // While playing, block reload shortcuts (F5, Ctrl/Cmd+R). Crouch is Ctrl and
+    // Reload is R, so crouch+reload would otherwise refresh the page. (Done
+    // before the auto-repeat early-out so a held combo is still suppressed.)
+    if (this.locked && (e.code === 'F5' || ((e.ctrlKey || e.metaKey) && e.code === 'KeyR'))) {
+      e.preventDefault();
+    }
+
     if (e.repeat) return; // ignore OS auto-repeat for edge detection
     this.keys.add(e.code);
-    // Prevent page scroll on space / arrows while playing
-    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+
+    // Prevent browser defaults for game keys while locked (page scroll, quick-find,
+    // etc.); always swallow space/arrow scrolling.
+    if (this.locked && BOUND_CODES.has(e.code)) {
+      e.preventDefault();
+    } else if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
       e.preventDefault();
     }
   }
@@ -151,6 +222,7 @@ export class Input {
     this.keys.clear();
     this.mouse.left = this.mouse.right = this.mouse.middle = false;
     this.mouseDX = this.mouseDY = 0;
+    this.moveX = this.moveY = 0;
     this._wheel = 0;
   }
 
@@ -200,6 +272,7 @@ export class Input {
   fireDown() { return this.mouse.left; }
   firePressed() { return this._mouseJustPressed.left; }
   adsDown() { return this.mouse.right; }
+  altPressed() { return this._mouseJustPressed.right; } // right-click edge (alt-fire)
 
   consumeWheel() {
     const w = this._wheel;

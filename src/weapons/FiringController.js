@@ -20,6 +20,7 @@ export class FiringController {
     this.viewModel = viewModel;
 
     this.cooldown = 0;
+    this._burst = null; // in-progress alt-fire burst { id, left, timer }
     this.raycaster = new THREE.Raycaster();
     this._origin = new THREE.Vector3();
     this._dir = new THREE.Vector3();
@@ -34,7 +35,18 @@ export class FiringController {
 
     const wm = this.weapons;
     const w = wm.weapon;
+
+    // advance an in-progress alt-fire burst (keeps firing after the trigger edge)
+    if (this._burst) { this._updateBurst(dt, w); return; }
+
     if (wm.isBusy()) return;
+
+    // alt-fire (right-click): start a burst for weapons that define one (Classic)
+    if (w.altFire && this.input.altPressed() && this.cooldown <= 0) {
+      this._burst = { id: wm.currentId, left: w.altFire.rounds, timer: 0 };
+      this._updateBurst(dt, w); // fire the first round immediately
+      return;
+    }
 
     const wantFire = w.automatic ? this.input.fireDown() : this.input.firePressed();
     if (!wantFire || this.cooldown > 0) return;
@@ -86,9 +98,45 @@ export class FiringController {
       .normalize();
   }
 
-  _hitscan(w) {
+  /** Fire one round of an active alt-fire burst, then schedule the next. */
+  _updateBurst(dt, w) {
+    const wm = this.weapons;
+    // cancel if the weapon changed or the player started reloading/swapping
+    if (wm.currentId !== this._burst.id || wm.isBusy()) { this._burst = null; return; }
+
+    this._burst.timer -= dt;
+    if (this._burst.timer > 0) return;
+
+    if (!wm.infiniteAmmoActive && wm.ammo.mag <= 0) {
+      this._burst = null;
+      bus.emit('weapon:empty');
+      wm.startReload();
+      this.cooldown = 0.25;
+      return;
+    }
+
+    wm.consumeRound();
+    bus.emit(EV.COMBAT_FIRED, { weapon: w });
+    this._hitscan(w, w.altFire.spreadDeg);
+
+    const rec = w.altFire.recoil;
+    this.cameraRig.recoverLambda = Math.max(5, rec.recoverPerSec * 60);
+    this.cameraRig.addRecoil(rec.pitchPerShot, (Math.random() - 0.5) * rec.yawJitter);
+    this.viewModel.triggerKick(1);
+
+    this._burst.left -= 1;
+    if (this._burst.left <= 0) {
+      this._burst = null;
+      this.cooldown = w.altFire.cooldown;
+    } else {
+      this._burst.timer = w.altFire.interval;
+    }
+  }
+
+  _hitscan(w, spreadDegOverride = null) {
     this.cameraRig.getAimRay(this._origin, this._dir); // base direction (no jitter)
-    const spread = deg2rad(this.weapons.isADS ? w.adsSpreadDeg : w.spreadDeg);
+    const spreadDeg = spreadDegOverride != null ? spreadDegOverride : (this.weapons.isADS ? w.adsSpreadDeg : w.spreadDeg);
+    const spread = deg2rad(spreadDeg);
     const pellets = w.pellets || 1;
     this._hits.clear();
 

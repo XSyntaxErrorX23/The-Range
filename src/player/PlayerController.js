@@ -36,14 +36,15 @@ export class PlayerController {
     this._fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
     this._right.set(Math.cos(yaw), 0, -Math.sin(yaw));
 
-    const f = (this.input.isDown('MOVE_FORWARD') ? 1 : 0) - (this.input.isDown('MOVE_BACK') ? 1 : 0);
-    const s = (this.input.isDown('MOVE_RIGHT') ? 1 : 0) - (this.input.isDown('MOVE_LEFT') ? 1 : 0);
+    // forward/strafe wish — analog (touch joystick) or digital (keys)
+    const { f, s } = this.input.wishVector();
 
     this._wish.set(0, 0, 0)
       .addScaledVector(this._fwd, f)
       .addScaledVector(this._right, s);
     const wishLen = this._wish.length();
-    if (wishLen > 1e-4) this._wish.multiplyScalar(1 / wishLen); // normalize (no diagonal boost)
+    // clamp to unit length (kills diagonal boost) but keep analog magnitudes < 1
+    if (wishLen > 1) this._wish.multiplyScalar(1 / wishLen);
 
     // crouch
     p.crouching = this.input.isDown('CROUCH');

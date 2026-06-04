@@ -12,6 +12,8 @@ export const WEAPONS = {
     damage: 26, headshotMult: 3.0, legMult: 0.85, fireRate: 400, automatic: false,
     magSize: 12, reserveAmmo: -1, reloadTime: 1.5, spreadDeg: 0.45, adsSpreadDeg: 0.25,
     recoil: R(0.012, 0.006, 0.12), canADS: false, adsFovMult: 1, range: 70, swapTime: 0.5,
+    // right-click: 3-round burst (Valorant Classic alt-fire) — wider spread, costs 3 rounds
+    altFire: { rounds: 3, interval: 0.06, cooldown: 0.3, spreadDeg: 1.5, recoil: R(0.02, 0.012, 0.16) },
   },
   shorty: {
     id: 'shorty', name: 'Shorty', category: 'sidearm', type: 'hitscan', price: 300,

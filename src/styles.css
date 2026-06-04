@@ -30,8 +30,13 @@ html, body {
   color: var(--text);
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
   cursor: default;
 }
+/* In touch mode, suppress native gestures (scroll/zoom/long-press) on the game. */
+body.touch-mode #app,
+body.touch-mode #touch-ui { touch-action: none; }
 
 #app {
   position: fixed;
@@ -545,3 +550,182 @@ html, body {
 .buy-cell svg { width: 6vw; height: 2vh; fill: var(--text); }
 .bw-name { font-size: 1.3vh; letter-spacing: 0.05em; text-transform: uppercase; }
 .bw-price { font-size: 1.05vh; color: var(--cyan); }
+
+/* ============================================================
+   Touch controls (mobile) — built by input/TouchControls.js
+   Hidden until .show; sits above the HUD, below menus.
+   Offsets respect notch safe areas.
+   ============================================================ */
+#touch-ui {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: none;
+  --edge: 3.5vmin;
+  --safe-l: max(var(--edge), env(safe-area-inset-left));
+  --safe-r: max(var(--edge), env(safe-area-inset-right));
+  --safe-b: max(var(--edge), env(safe-area-inset-bottom));
+  --safe-t: max(var(--edge), env(safe-area-inset-top));
+}
+#touch-ui.show { display: block; }
+
+.tc-look {
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* below joystick + buttons */
+}
+
+/* movement joystick */
+.tc-move {
+  position: absolute;
+  left: var(--safe-l);
+  bottom: var(--safe-b);
+  width: 34vmin; height: 34vmin;
+  max-width: 220px; max-height: 220px;
+  z-index: 3;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(70,224,214,0.06), rgba(13,20,26,0.35));
+  border: 1.5px solid rgba(70,224,214,0.3);
+  touch-action: none;
+}
+.tc-move-thumb {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 14vmin; height: 14vmin;
+  max-width: 92px; max-height: 92px;
+  margin-left: -7vmin; margin-top: -7vmin;
+  border-radius: 50%;
+  background: rgba(70,224,214,0.22);
+  border: 1.5px solid var(--cyan);
+  will-change: transform;
+}
+
+/* generic button */
+.tc-btn {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(13,20,26,0.55);
+  border: 1.5px solid rgba(255,255,255,0.22);
+  color: var(--text);
+  font-size: 2vmin;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.tc-btn.active { background: rgba(70,224,214,0.3); border-color: var(--cyan); color: #06140f; }
+
+/* primary combat cluster (bottom-right) */
+.tc-fire {
+  right: var(--safe-r); bottom: calc(var(--safe-b) + 10vmin);
+  width: 20vmin; height: 20vmin; max-width: 130px; max-height: 130px;
+  border-color: rgba(255,70,85,0.6); font-size: 2.3vmin;
+}
+.tc-fire.active { background: rgba(255,70,85,0.32); border-color: var(--red); color: #fff; }
+.tc-ads {
+  right: calc(var(--safe-r) + 21vmin); bottom: calc(var(--safe-b) + 22vmin);
+  width: 12vmin; height: 12vmin; max-width: 80px; max-height: 80px;
+}
+.tc-jump {
+  right: calc(var(--safe-r) + 22vmin); bottom: calc(var(--safe-b) + 7vmin);
+  width: 13vmin; height: 13vmin; max-width: 84px; max-height: 84px;
+}
+.tc-reload {
+  right: calc(var(--safe-r) + 1vmin); bottom: calc(var(--safe-b) + 32vmin);
+  width: 11vmin; height: 11vmin; max-width: 72px; max-height: 72px;
+  font-size: 4vmin;
+}
+.tc-crouch {
+  right: calc(var(--safe-r) + 13vmin); bottom: calc(var(--safe-b) + 32vmin);
+  width: 11vmin; height: 11vmin; max-width: 72px; max-height: 72px;
+}
+
+/* weapon slots — vertical stack on the right edge, mid-height */
+.tc-slot {
+  right: var(--safe-r);
+  width: 10vmin; height: 10vmin; max-width: 64px; max-height: 64px;
+  border-radius: 8px;
+}
+.tc-slot1 { top: 30vh; }
+.tc-slot2 { top: calc(30vh + 11vmin); }
+.tc-slot3 { top: calc(30vh + 22vmin); }
+
+/* abilities — row along the bottom-left, above the joystick */
+.tc-abil {
+  left: var(--safe-l);
+  width: 10vmin; height: 10vmin; max-width: 60px; max-height: 60px;
+  bottom: calc(var(--safe-b) + 35vmin);
+  border-radius: 8px;
+  border-color: rgba(70,224,214,0.35);
+}
+.tc-abil-c { left: var(--safe-l); }
+.tc-abil-q { left: calc(var(--safe-l) + 11vmin); }
+.tc-abil-e { left: calc(var(--safe-l) + 22vmin); }
+.tc-abil-x { left: calc(var(--safe-l) + 33vmin); border-color: rgba(255,70,85,0.45); }
+
+/* top-row utility buttons */
+.tc-top {
+  top: var(--safe-t);
+  width: 11vmin; height: 8vmin; max-width: 72px; max-height: 52px;
+  border-radius: 8px; font-size: 1.7vmin;
+}
+.tc-pause { right: var(--safe-r); }
+.tc-buy { right: calc(var(--safe-r) + 12vmin); }
+.tc-view { right: calc(var(--safe-r) + 24vmin); }
+
+/* portrait nudge */
+#rotate-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  background: #0a0e12;
+  color: var(--text);
+  font-size: 2.4vh;
+  letter-spacing: 0.1em;
+  text-align: center;
+  padding: 6vw;
+}
+#rotate-hint .rh-icon { font-size: 9vh; color: var(--cyan); animation: rh-spin 2.4s linear infinite; }
+@keyframes rh-spin { to { transform: rotate(360deg); } }
+
+@media (orientation: portrait) {
+  body.touch-mode #rotate-hint { display: flex; }
+  body.touch-mode #touch-ui.show { display: none; }
+}
+
+/* ============================================================
+   Responsive: keep menus usable on small / short screens.
+   ============================================================ */
+@media (max-width: 820px), (max-height: 540px) {
+  .panel { padding: 2.4vh 4vw; max-width: 96vw; max-height: 92vh; overflow-y: auto; }
+  .panel h1 { font-size: 5vh; letter-spacing: 0.2em; }
+  .controls-grid { max-width: 86vw; font-size: 1.9vh; gap: 0.4vh 3vw; }
+  .set-row { min-width: 76vw; font-size: 2.1vh; }
+  .set-row input[type="range"] { width: 38vw; }
+  .ign-row input, .ign-field { width: 44vw; }
+  .buymenu { max-width: 98vw; }
+  .buy-cols { gap: 1.4vw; }
+  .buy-col { min-width: 28vw; }
+  .buy-cell svg { width: 16vw; }
+  .bw-name { font-size: 2.4vh; }
+  .bw-price { font-size: 2vh; }
+  .btn { font-size: 2.1vh; padding: 1.4vh 5vw; }
+  .btn.big { font-size: 2.6vh; }
+}
+
+/* coarse pointer (touch): bump tiny HUD text so it stays legible */
+@media (pointer: coarse) {
+  #health .pname { font-size: 1.8vh; max-width: 28vw; }
+  #health .hp-num, #ammo .ammo-mag { font-size: 4vh; }
+  #scorebar .sb-num { font-size: 3vh; }
+}
