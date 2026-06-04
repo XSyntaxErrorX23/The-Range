@@ -165,6 +165,15 @@ export class HUD {
     this.enemyhp.innerHTML = '<span class="eh-name" id="eh-name">ENEMY</span><div class="eh-bar"><div id="eh-fill"></div></div>';
     this.root.appendChild(this.enemyhp);
 
+    // zombie survival status bar (hidden outside zombie mode)
+    this.zombiebar = this._el('div'); this.zombiebar.id = 'zombiebar';
+    this.zombiebar.innerHTML =
+      '<span class="zb-wave" id="zb-wave">WAVE 1/5</span>' +
+      '<span class="zb-sub" id="zb-sub"></span>' +
+      '<span class="zb-lives" id="zb-lives">◆◆◆</span>' +
+      '<span class="zb-credits" id="zb-credits">¤ 0</span>';
+    this.root.appendChild(this.zombiebar);
+
     // damage feedback + round announcements
     this.hurt = this._el('div'); this.hurt.id = 'hurt';
     this.root.appendChild(this.hurt);
@@ -200,6 +209,28 @@ export class HUD {
     document.getElementById('eh-name').textContent = 'ENEMY · ' + (s.enemyName || 'BOT').toUpperCase();
     const fill = document.getElementById('eh-fill');
     if (fill) fill.style.width = Math.max(0, Math.round(100 * s.enemyHealth / (s.enemyMax || 100))) + '%';
+  }
+
+  setZombie(s) {
+    this.zombiebar.classList.toggle('show', !!s.active);
+    this.enemyhp.classList.toggle('show', !!(s.active && s.boss));
+    this.rangepanel.style.display = s.active ? 'none' : ''; // declutter in zombie mode
+    if (!s.active) return;
+    document.getElementById('zb-wave').textContent = s.boss ? 'BOSS' : `WAVE ${s.wave}/${s.totalWaves}`;
+    document.getElementById('zb-sub').textContent = s.intermission ? `NEXT WAVE ${s.intermission}s` : `${s.zombiesLeft} LEFT`;
+    document.getElementById('zb-lives').textContent = '◆'.repeat(Math.max(0, s.lives)) + '◇'.repeat(Math.max(0, 3 - s.lives));
+    document.getElementById('zb-credits').textContent = '¤ ' + s.credits;
+    if (s.boss) {
+      document.getElementById('eh-name').textContent = 'THE GRAVEKEEPER';
+      const fill = document.getElementById('eh-fill');
+      if (fill) fill.style.width = Math.max(0, Math.round(100 * s.bossHealth / (s.bossMax || 1))) + '%';
+    }
+  }
+
+  showPickup(type) {
+    const labels = { health: '+45 HP', speed: 'SPEED BOOST', damage: '2× DAMAGE', ammo: 'AMMO REFILLED' };
+    this.commsfeed.innerHTML = `<span class="cf-name">PICKUP</span> ${labels[type] || type}`;
+    this._flash(this.commsfeed);
   }
 
   announceShow(text, sub) {
@@ -352,5 +383,8 @@ export class HUD {
     bus.on(EV.PLAYER_HEALTH, (h) => this.setHealth(h));
     bus.on(EV.SKIRMISH_STATE, (s) => this.setSkirmish(s));
     bus.on(EV.SKIRMISH_ANNOUNCE, (a) => this.announceShow(a.text, a.sub));
+    bus.on(EV.ZOMBIE_STATE, (s) => this.setZombie(s));
+    bus.on(EV.ZOMBIE_ANNOUNCE, (a) => this.announceShow(a.text, a.sub));
+    bus.on(EV.PICKUP, ({ type }) => this.showPickup(type));
   }
 }

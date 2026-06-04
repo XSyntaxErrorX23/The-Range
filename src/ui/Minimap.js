@@ -20,6 +20,12 @@ export class Minimap {
     this.ctx.scale(dpr, dpr);
     root.appendChild(this.canvas);
 
+    this.setWorld(world);
+  }
+
+  /** Re-point at a world and recompute scale from its bounds (used on world swap). */
+  setWorld(world) {
+    this.world = world;
     const b = world.bounds;
     this.cx = (b.minX + b.maxX) / 2;
     this.cz = (b.minZ + b.maxZ) / 2;
@@ -55,11 +61,14 @@ export class Minimap {
       ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
     }
 
-    // enemies (practice dummies + skirmish opponent)
+    // enemies (practice dummies + skirmish opponent + zombies)
     ctx.fillStyle = '#ff4655';
     for (const bot of this.bots.pool) if (bot.alive) this._dot(bot.root.position);
     const e = this.bots.skirmishEnemyBot;
     if (e && e.alive) this._dot(e.root.position, 3.8);
+    if (this.bots.zombieBots) {
+      for (const z of this.bots.zombieBots) if (z.alive) this._dot(z.root.position, z.maxHealth > 400 ? 6 : 3.2);
+    }
 
     // player arrow (oriented to look yaw)
     const [px, py] = this._map(this.player.position.x, this.player.position.z);

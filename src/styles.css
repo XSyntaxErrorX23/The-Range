@@ -266,6 +266,7 @@ body.touch-mode #touch-ui { touch-action: none; }
 }
 .dmgnum.head { color: var(--hs-red); font-size: 2.6vh; }
 .dmgnum.score { color: var(--cyan); }
+.dmgnum.credit { color: #ffcf3a; font-size: 1.8vh; text-shadow: 0 0 4px rgba(255,207,58,0.6), 0 1px 2px #000; }
 .dmgnum.score.bull { color: #ffcf3a; font-size: 3vh; text-shadow: 0 0 6px rgba(255,207,58,0.7), 0 1px 2px #000; }
 
 /* Camera-mode indicator */
@@ -627,6 +628,8 @@ body.touch-mode #touch-ui { touch-action: none; }
 }
 .buy-cell:hover { border-color: var(--cyan); background: rgba(70, 224, 214, 0.08); transform: translateY(-1px); }
 .buy-cell.equipped { border-color: var(--cyan); background: rgba(70, 224, 214, 0.16); }
+.buy-cell.unaffordable { opacity: 0.38; filter: grayscale(0.6); }
+.buy-credits { color: #ffcf3a; font-size: 1.8vh; letter-spacing: 0.08em; margin-left: 0.6vw; }
 .buy-cell svg { width: 6vw; height: 2vh; fill: var(--text); }
 .bw-name { font-size: 1.3vh; letter-spacing: 0.05em; text-transform: uppercase; }
 .bw-price { font-size: 1.05vh; color: var(--cyan); }
@@ -665,6 +668,25 @@ body.touch-mode #touch-ui { touch-action: none; }
   gap: 0.4vh;
 }
 #enemyhp.show { display: flex; }
+
+#zombiebar {
+  position: absolute;
+  left: 50%; top: 9.4vh;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 1.4vw;
+  padding: 0.5vh 1.8vw;
+  background: var(--panel);
+  border: 1px solid rgba(120, 200, 90, 0.4);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+#zombiebar.show { display: flex; }
+#zombiebar .zb-wave { font-size: 1.9vh; font-weight: 800; letter-spacing: 0.08em; color: #8ee06a; }
+#zombiebar .zb-sub { font-size: 1.2vh; letter-spacing: 0.12em; color: var(--text-dim); }
+#zombiebar .zb-lives { font-size: 1.7vh; color: var(--red); letter-spacing: 0.1em; }
+#zombiebar .zb-credits { font-size: 1.6vh; font-weight: 700; color: #ffcf3a; }
 #enemyhp .eh-name { font-size: 1.1vh; letter-spacing: 0.18em; color: var(--red); text-transform: uppercase; }
 #enemyhp .eh-bar { width: 100%; height: 0.9vh; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,70,85,0.45); border-radius: 2px; overflow: hidden; }
 #enemyhp #eh-fill { height: 100%; width: 100%; background: var(--red); transition: width 0.12s linear; }

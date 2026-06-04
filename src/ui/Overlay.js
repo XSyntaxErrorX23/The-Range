@@ -39,8 +39,12 @@ export class Overlay {
     this.onReset = () => {};
     this.onRematch = () => {};
     this.onExitSkirmish = () => {};
+    this.onContinue = () => {};
     this.getStats = () => ({ session: {}, lifetime: {} });
     this.onResetLifetime = () => {};
+    this.getCredits = () => null; // null => free buying (non-zombie modes)
+    this.onBuyAmmo = () => {};
+    this.onBuyArmor = () => {};
 
     this._build();
     this._buyKeyHandler = this._buyKeyHandler.bind(this);
@@ -76,8 +80,8 @@ export class Overlay {
       '<h1>THE <span class="accent">RANGE</span></h1>' +
       `<div class="subtitle">${returning ? 'Welcome back, agent' : 'Practice · Skills Test'}</div>`;
 
-    // mode selector (Practice Range vs Skirmish 1v1)
-    this._practiceMode = this.settings.botMode !== 'skirmish' ? this.settings.botMode : 'static';
+    // mode selector (Practice / Skirmish / Zombie)
+    this._practiceMode = ['skirmish', 'zombie'].includes(this.settings.botMode) ? 'static' : this.settings.botMode;
     this.modeRow = this._el('div', 'mode-row');
     const mkMode = (key, title, desc) => {
       const b = document.createElement('button');
@@ -89,6 +93,7 @@ export class Overlay {
     };
     this.modeRow.appendChild(mkMode('practice', 'PRACTICE RANGE', 'Drills & dummies'));
     this.modeRow.appendChild(mkMode('skirmish', 'SKIRMISH 1V1', 'Duel a bot · first to 5'));
+    this.modeRow.appendChild(mkMode('zombie', 'ZOMBIE SURVIVAL', 'Waves · boss · survive'));
     sp.appendChild(this.modeRow);
 
     // IGN entry
@@ -170,6 +175,9 @@ export class Overlay {
     rp.appendChild(this.resultTitle);
     rp.appendChild(this.resultScore);
     rp.appendChild(document.createElement('br'));
+    this.resultContinue = this._btn('CONTINUE — ENDLESS', 'big', () => this.onContinue());
+    this.resultContinue.style.display = 'none';
+    rp.appendChild(this.resultContinue);
     rp.appendChild(this._btn('REMATCH', 'big', () => this.onRematch()));
     rp.appendChild(document.createElement('br'));
     rp.appendChild(this._btn('EXIT TO RANGE', 'secondary', () => this.onExitSkirmish()));
@@ -178,7 +186,7 @@ export class Overlay {
     // ---- buy menu (Armory) ----
     this.buymenu = this._modal('m-buy');
     const bp = document.createElement('div'); bp.className = 'panel buymenu';
-    bp.innerHTML = '<h2>ARMORY</h2>';
+    bp.innerHTML = '<h2>ARMORY <span id="buy-credits" class="buy-credits"></span></h2>';
     const cols = this._el('div', 'buy-cols');
     for (const cat of CATEGORIES) {
       const col = this._el('div', 'buy-col');
@@ -194,6 +202,12 @@ export class Overlay {
       cols.appendChild(col);
     }
     bp.appendChild(cols);
+    this.buyAmmoBtn = this._btn('REFILL AMMO  ¤ 200', 'secondary', () => { this.onBuyAmmo(); this._refreshBuyHighlights(); });
+    this.buyAmmoBtn.style.display = 'none';
+    bp.appendChild(this.buyAmmoBtn);
+    this.buyArmorBtn = this._btn('BUY ARMOR  ¤ 500', 'secondary', () => { this.onBuyArmor(); this._refreshBuyHighlights(); });
+    this.buyArmorBtn.style.display = 'none';
+    bp.appendChild(this.buyArmorBtn);
     bp.appendChild(this._el('div', 'hint', 'Click a weapon to equip · [B] or Esc to close'));
     bp.appendChild(this._btn('CLOSE', 'big', () => this._closeBuy()));
     this.buymenu.appendChild(bp);
@@ -210,7 +224,7 @@ export class Overlay {
     p.appendChild(this._slider('Crosshair Gap', 1, 16, 1, s.crosshairGap, (v) => { s.set('crosshairGap', v); }, (v) => String(v)));
 
     p.appendChild(this._select('View', [['first', 'First person'], ['third', 'Third person']], s.view, (v) => s.set('view', v)));
-    p.appendChild(this._select('Bot Mode', [['static', 'Static'], ['strafe', 'Strafing'], ['popup', 'Pop-up drill'], ['skirmish', 'Skirmish (1v1)']], s.botMode, (v) => s.set('botMode', v)));
+    p.appendChild(this._select('Bot Mode', [['static', 'Static'], ['strafe', 'Strafing'], ['popup', 'Pop-up drill'], ['skirmish', 'Skirmish (1v1)'], ['zombie', 'Zombie Survival']], s.botMode, (v) => s.set('botMode', v)));
     p.appendChild(this._select('AI Difficulty', [['easy', 'Easy'], ['medium', 'Medium'], ['hard', 'Hard']], s.aiDifficulty, (v) => s.set('aiDifficulty', v)));
     p.appendChild(this._toggle('Bot Armor', s.botArmor, (v) => s.set('botArmor', v)));
     p.appendChild(this._toggle('Infinite Ammo', s.infiniteAmmo, (v) => s.set('infiniteAmmo', v)));
@@ -275,9 +289,15 @@ export class Overlay {
 
   _refreshBuyHighlights() {
     const lo = this.getLoadout() || {};
+    const credits = this.getCredits ? this.getCredits() : null;
+    const cr = document.getElementById('buy-credits');
+    if (cr) cr.textContent = credits == null ? '' : `¤ ${credits}`;
+    if (this.buyAmmoBtn) this.buyAmmoBtn.style.display = credits == null ? 'none' : '';
+    if (this.buyArmorBtn) this.buyArmorBtn.style.display = credits == null ? 'none' : '';
     for (const cell of this.buymenu.querySelectorAll('.buy-cell')) {
       const id = cell.dataset.id;
       cell.classList.toggle('equipped', id === lo.primaryId || id === lo.sidearmId);
+      cell.classList.toggle('unaffordable', credits != null && (WEAPONS[id]?.price || 0) > credits);
     }
   }
 
@@ -295,17 +315,16 @@ export class Overlay {
   }
 
   _selectMode(key) {
-    if (key === 'skirmish') this.settings.set('botMode', 'skirmish');
+    if (key === 'skirmish' || key === 'zombie') this.settings.set('botMode', key);
     else this.settings.set('botMode', this._practiceMode || 'static');
     this._refreshModeButtons();
   }
 
   _refreshModeButtons() {
     if (!this.modeRow) return;
-    const isSkirm = this.settings.botMode === 'skirmish';
-    for (const b of this.modeRow.children) {
-      b.classList.toggle('sel', (b.dataset.mode === 'skirmish') === isSkirm);
-    }
+    const bm = this.settings.botMode;
+    const cur = bm === 'skirmish' || bm === 'zombie' ? bm : 'practice';
+    for (const b of this.modeRow.children) b.classList.toggle('sel', b.dataset.mode === cur);
   }
 
   showStart() { this._refreshModeButtons(); this._show(this.start); }
@@ -330,10 +349,11 @@ export class Overlay {
     }, 1400);
   }
 
-  showResult({ win, playerScore, enemyScore }) {
-    this.resultTitle.textContent = win ? 'VICTORY' : 'DEFEAT';
+  showResult({ win, playerScore, enemyScore, title, detail, canContinue }) {
+    this.resultTitle.textContent = title || (win ? 'VICTORY' : 'DEFEAT');
     this.resultTitle.classList.toggle('lose', !win);
-    this.resultScore.textContent = `${playerScore} — ${enemyScore}`;
+    this.resultScore.textContent = detail != null ? detail : `${playerScore} — ${enemyScore}`;
+    this.resultContinue.style.display = canContinue ? '' : 'none';
     this._show(this.result);
   }
   openSettings() { this._buildSettings(); this._show(this.settingsModal); }

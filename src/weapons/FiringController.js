@@ -167,7 +167,7 @@ export class FiringController {
       const zone = bh.object.userData.hitZone || 'body';
       if (!bot || !bot.alive) return;
       const zmult = zone === 'head' ? w.headshotMult : zone === 'leg' ? (w.legMult || 1) : 1;
-      const dmg = Math.round(w.damage * zmult * mult);
+      const dmg = Math.round(w.damage * zmult * mult * (this.damageMult || 1)); // damageMult: pickup boost
       const dead = bot.takeDamage(dmg, zone, bh.point);
       let agg = this._hits.get(bot);
       if (!agg) { agg = { dmg: 0, head: false, point: bh.point.clone(), dead: false }; this._hits.set(bot, agg); }

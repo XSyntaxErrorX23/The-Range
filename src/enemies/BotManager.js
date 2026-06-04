@@ -32,11 +32,14 @@ export class BotManager {
 
     this.skirmish = false;        // skirmish mode -> no practice dummies
     this.skirmishEnemyBot = null; // the duel opponent's Bot (set by Skirmish)
+    this.zombie = false;          // zombie mode -> no practice dummies
+    this.zombieBots = [];         // live zombie Bots (kept in sync by ZombieSurvival)
   }
 
   setMode(mode) {
     this.mode = mode;
     this.skirmish = mode === 'skirmish';
+    this.zombie = mode === 'zombie';
     for (const b of this.pool) b.hide();
     this.spawnCooldown = 0;
     this._dirty = true;
@@ -47,6 +50,12 @@ export class BotManager {
     // only fully-risen bots are shootable (during the rise animation the visual
     // is still scaling up from the floor, so its colliders shouldn't count yet)
     this.targetList.length = 0;
+    if (this.zombie) {
+      for (const z of this.zombieBots) {
+        if (z.alive && z.state === 'alive') this.targetList.push(...z.colliderMeshes());
+      }
+      return;
+    }
     if (this.skirmish) {
       const e = this.skirmishEnemyBot;
       if (e && e.alive && e.state === 'alive') this.targetList.push(...e.colliderMeshes());
@@ -109,7 +118,7 @@ export class BotManager {
       }
     }
 
-    if (!this.skirmish) {
+    if (!this.skirmish && !this.zombie) {
       const target = this.mode === 'popup' ? this.popupActive : this.maxActive;
       if (activeCount < target && this.spawnCooldown <= 0) {
         this._spawnOne();

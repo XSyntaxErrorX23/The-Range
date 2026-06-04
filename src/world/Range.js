@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { setupLights } from './lights.js';
 import { Scoreboard } from './scoreboard.js';
 import {
   canvasTexture, concreteCanvas, plasterCanvas, woodCanvas,
@@ -77,8 +76,7 @@ export class Range {
       line: new THREE.MeshBasicMaterial({ color: 0xe08a2a }),
     };
 
-    setupLights(scene);
-    // base structure — always present
+    // base structure — always present (lighting is owned by Game; see enter())
     this._buildShell();
     this._buildTrusses();
     this._buildPillars();
@@ -102,6 +100,19 @@ export class Range {
     this.scoreboard = new Scoreboard(scene, new THREE.Vector3(0, 5.3, 30));
     this.setLayout('practice');
   }
+
+  /** Apply this world's atmosphere (warm indoor) — called by Game on world swap. */
+  enter(scene, lights) {
+    scene.background = new THREE.Color(0xd8cbb0);
+    scene.fog = new THREE.Fog(0xd8cbb0, 32, 85);
+    if (lights) {
+      lights.sun.color.set(0xfff2dd); lights.sun.intensity = 1.05;
+      lights.sun.position.set(16, 18, 4); lights.sun.target.position.set(0, 0, 20);
+      lights.hemi.color.set(0xfff0d8); lights.hemi.groundColor.set(0xb59a70); lights.hemi.intensity = 0.6;
+      lights.amb.color.set(0x403828); lights.amb.intensity = 0.25;
+    }
+  }
+  exit() {}
 
   /** Show one prop layer ('practice' | 'arena') over the base and recompute the
    *  active collision/occlusion/solid lists. Other systems read these via the

@@ -1,7 +1,19 @@
 // Game version + patch notes (shown on the welcome screen).
-export const VERSION = '0.4.0';
+export const VERSION = '0.5.0';
 
 export const PATCH_NOTES = [
+  {
+    version: '0.5.0',
+    date: '2026-06-04',
+    title: 'Graveyard Update',
+    notes: [
+      'New mode — ZOMBIE SURVIVAL: a night graveyard map with destroyed-construction parkour, 5 escalating waves and a final boss.',
+      '3 lives, a credits economy (earn per kill, buy in the Armory between waves), and pickups: health, speed, 2× damage, ammo.',
+      'Melee zombies that rise from the ground and swarm you; the Gravekeeper boss has a health bar.',
+      'Bullet penetration (wallbang) through light cover, weapon inspect (Y), and shootable range distance buttons.',
+      'Cinematic start-screen flythrough, minimap moved right, upgraded radio wheel, and weapon weight affecting move speed.',
+    ],
+  },
   {
     version: '0.4.0',
     date: '2026-06-04',

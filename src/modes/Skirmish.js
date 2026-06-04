@@ -38,11 +38,14 @@ export class Skirmish {
   }
 
   _ensureEnemy() {
-    if (this.enemy) return;
-    this.enemy = new EnemyAgent(this.scene, this.world, this.player, {
-      difficulty: this.settings.aiDifficulty,
-      onDamagePlayer: (dmg, head) => this.player.takeDamage(dmg, head),
-    });
+    if (!this.enemy) {
+      this.enemy = new EnemyAgent(this.scene, this.world, this.player, {
+        difficulty: this.settings.aiDifficulty,
+        onDamagePlayer: (dmg, head) => this.player.takeDamage(dmg, head),
+      });
+    }
+    // Always (re)register with the firing target list — deactivate() nulls it,
+    // so returning to skirmish after another mode would otherwise leave it empty.
     this.bots.skirmishEnemyBot = this.enemy.bot;
   }
 

@@ -64,6 +64,7 @@ export class PlayerController {
     let target = p.crouching ? this.CROUCH_SPEED : (this.input.isDown('WALK') ? this.WALK_SPEED : this.RUN_SPEED);
     if (this.weapons && this.weapons.adsSpeedMult) target *= this.weapons.adsSpeedMult();
     if (this.weapons && this.weapons.equipSpeedMult) target *= this.weapons.equipSpeedMult();
+    if (p.speedBoost) target *= p.speedBoost; // temporary pickup boost
 
     // horizontal velocity
     let hx = p.velocity.x;

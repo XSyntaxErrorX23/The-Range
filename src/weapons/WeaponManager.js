@@ -30,6 +30,7 @@ export class WeaponManager {
     this.reloading = false;
     this.reloadTimer = 0;
     this.isADS = false;
+    this.noInfinite = false; // zombie mode forces finite ammo
 
     this.equip(this.currentId, true);
   }
@@ -37,7 +38,31 @@ export class WeaponManager {
   get weapon() { return WEAPONS[this.currentId]; }
   get ammo() { return this.ammoState[this.currentId]; }
   get reservedInfinite() { return this.ammo.reserve < 0; }
-  get infiniteAmmoActive() { return this.settings.infiniteAmmo && this.currentId !== 'blades'; }
+  get infiniteAmmoActive() {
+    if (this.noInfinite) return false;
+    return this.settings.infiniteAmmo && this.currentId !== 'blades';
+  }
+
+  /** Switch finite-ammo mode (zombie). `on` gives every gun `mags` spare mags;
+   *  off restores the config reserves (-1 = infinite). */
+  setFiniteAmmo(on, mags = 4) {
+    this.noInfinite = on;
+    for (const id of Object.keys(WEAPONS)) {
+      const w = WEAPONS[id];
+      if (w.type === 'melee' || id === 'blades') continue;
+      this.ammoState[id].reserve = on ? w.magSize * mags : w.reserveAmmo;
+    }
+    this._emitAmmo();
+  }
+
+  /** Top the current weapon's mag + reserve (ammo purchase / pickup). */
+  refillCurrent(mags = 4) {
+    const w = this.weapon;
+    if (w.type === 'melee') return;
+    this.ammo.mag = w.magSize;
+    if (this.ammo.reserve >= 0) this.ammo.reserve = Math.max(this.ammo.reserve, w.magSize * mags);
+    this._emitAmmo();
+  }
 
   isBusy() { return this.equipping > 0 || this.reloading; }
 

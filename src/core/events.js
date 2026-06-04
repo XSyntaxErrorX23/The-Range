@@ -50,6 +50,12 @@ export const EV = {
   COMBAT_SLASH: 'combat:slash', // melee hit a surface — { point, normal }
   ACCURACY_SCORE: 'accuracy:score', // shot the range accuracy target — { score, point }
   RANGE_DISTANCE: 'range:distance', // shot a distance button — { distance }
+  ZOMBIE_STATE: 'zombie:state', // { active, wave, totalWaves, zombiesLeft, lives, credits, boss, bossHealth, bossMax }
+  ZOMBIE_ANNOUNCE: 'zombie:announce', // { text, sub }
+  ZOMBIE_END: 'zombie:end', // { win, wave }
+  ZOMBIE_ATTACK: 'zombie:attack', // a zombie bit the player — { boss }
+  ZOMBIE_CREDIT: 'zombie:credit', // gold earned from a kill — { amount, point }
+  PICKUP: 'pickup:collected', // { type, point }
   PLAYER_HEALTH: 'player:health', // { health, armor, max }
   PLAYER_DEAD: 'player:dead', // { byHead }
   ENEMY_FIRED: 'enemy:fired', // skirmish AI shot — { from, to, hit }

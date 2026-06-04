@@ -11,11 +11,14 @@ import { CameraRig } from '../player/CameraRig.js';
 import { Abilities } from '../player/Abilities.js';
 import { resolveCollision } from '../player/collision.js';
 import { Range } from '../world/Range.js';
+import { Graveyard } from '../world/Graveyard.js';
+import { setupLights } from '../world/lights.js';
 import { ViewModel } from '../weapons/ViewModel.js';
 import { WeaponManager } from '../weapons/WeaponManager.js';
 import { FiringController } from '../weapons/FiringController.js';
 import { BotManager } from '../enemies/BotManager.js';
 import { Skirmish } from '../modes/Skirmish.js';
+import { ZombieSurvival } from '../modes/ZombieSurvival.js';
 import { AudioManager } from '../fx/AudioManager.js';
 import { FXManager } from '../fx/FXManager.js';
 import { Settings } from '../ui/Settings.js';
@@ -43,7 +46,10 @@ export class Game {
     this.cameraRig = new CameraRig(this.engine.camera, this.input, this.player, this.settings);
     this.cameraRig.yaw = Math.PI; // face +Z (downrange)
 
-    this.world = new Range(this.engine.scene);
+    this.lights = setupLights(this.engine.scene); // Game owns lighting; worlds re-tint via enter()
+    this.range = new Range(this.engine.scene);
+    this.graveyard = null; // built lazily on first zombie mode
+    this.world = this.range;
     this.cameraRig.setWorld(this.world);
 
     this.viewModel = new ViewModel(this.engine.camera);
@@ -69,6 +75,17 @@ export class Game {
       bots: this.bots,
       settings: this.settings,
       weapons: this.weapons,
+    });
+
+    // Zombie survival coordinator (dormant until bot mode === 'zombie')
+    this.zombie = new ZombieSurvival({
+      scene: this.engine.scene,
+      player: this.player,
+      cameraRig: this.cameraRig,
+      bots: this.bots,
+      settings: this.settings,
+      weapons: this.weapons,
+      firing: this.firing,
     });
 
     // UI / FX (HUD builds #damage-layer that FXManager uses — build HUD first)
@@ -107,7 +124,7 @@ export class Game {
     this._wireSettings();
 
     // shoot a distance button -> slide the accuracy target to that range
-    bus.on(EV.RANGE_DISTANCE, ({ distance }) => this.world.setTargetDistance(distance));
+    bus.on(EV.RANGE_DISTANCE, ({ distance }) => { if (this.world.setTargetDistance) this.world.setTargetDistance(distance); });
 
     this._stepT = 0; // footstep cadence timer
 
@@ -120,6 +137,13 @@ export class Game {
       { pos: V(18, 5.0, 0), look: V(2, 1.5, 30) },    // high over the right side
       { pos: V(-21, 4.5, 8), look: V(-15, 1.2, 20) }, // the parkour course
       { pos: V(6, 4.5, 42), look: V(0, 4.6, 30) },    // up at the scoreboard
+    ];
+    this._cineWaypointsGrave = [
+      { pos: V(0, 8, -27), look: V(0, 1.5, 4) },     // wide overview from the south
+      { pos: V(-16, 4, -13), look: V(-22, 2.5, -20) }, // the crypt
+      { pos: V(13, 3, 11), look: V(20, 1.5, -16) },   // construction + far yard
+      { pos: V(-11, 6, 18), look: V(2, 1, -4) },       // over the graves
+      { pos: V(22, 5, -4), look: V(-12, 1.5, 8) },     // sweep across
     ];
     this._cineT = 0;
     this._cineActive = true; // start-screen flythrough until first lock
@@ -135,7 +159,7 @@ export class Game {
 
   /** Glide the camera between waypoints (eased), looping — runs while menus are up. */
   _cineUpdate(dt) {
-    const wps = this._cineWaypoints;
+    const wps = (this.world === this.graveyard && this.graveyard) ? this._cineWaypointsGrave : this._cineWaypoints;
     const SEG = 5.5; // seconds per leg
     this._cineT += dt;
     const total = this._cineT / SEG;
@@ -164,12 +188,22 @@ export class Game {
   _wireOverlay() {
     this.overlay.onPlay = () => { this.audio.resume(); this.input.requestLock(); };
     this.overlay.onResume = () => { this.input.requestLock(); };
-    this.overlay.onBuy = (id) => this.weapons.setLoadout(id);
+    this.overlay.onBuy = (id) => {
+      if (this.settings.botMode === 'zombie') this.zombie.tryBuy(id);
+      else this.weapons.setLoadout(id);
+    };
+    this.overlay.getCredits = () => (this.settings.botMode === 'zombie' && this.zombie.active ? this.zombie.credits : null);
+    this.overlay.onBuyAmmo = () => this.zombie.buyAmmo();
+    this.overlay.onBuyArmor = () => this.zombie.buyArmor();
     this.overlay.getLoadout = () => ({ primaryId: this.weapons.primaryId, sidearmId: this.weapons.sidearmId });
     this.overlay.onReset = () => this.score.reset();
     this.overlay.getStats = () => this.score.getStats();
     this.overlay.onResetLifetime = () => this.score.resetLifetime();
-    this.overlay.onRematch = () => { this.skirmish.rematch(); this.input.requestLock(); };
+    this.overlay.onRematch = () => {
+      if (this.settings.botMode === 'zombie') this.zombie.activate(this.graveyard);
+      else this.skirmish.rematch();
+      this.input.requestLock();
+    };
     this.overlay.onExitSkirmish = () => { this.settings.set('botMode', 'static'); this.input.requestLock(); };
 
     // match over -> show the result screen (unlock so the cursor returns)
@@ -177,18 +211,52 @@ export class Game {
       this.overlay.showResult({ win, playerScore: this.skirmish.playerScore, enemyScore: this.skirmish.enemyScore });
       this.input.exitLock();
     };
+    this.zombie.onMatchEnd = (win) => {
+      const detail = win ? `Cleared 5 waves + the Gravekeeper` : `Reached wave ${this.zombie.wave}`;
+      this.overlay.showResult({ win, title: win ? 'VICTORY' : 'DEFEAT', detail, canContinue: win && !this.zombie.endless });
+      this.input.exitLock();
+    };
+    this.overlay.onContinue = () => { this.zombie.startEndless(); this.input.requestLock(); };
   }
 
-  /** Switch range mode, swapping the map layout + skirmish coordinator. */
+  /** Switch mode: swap the active world + coordinator (range layouts / graveyard). */
   _setMode(mode) {
     this.bots.setMode(mode);
-    if (mode === 'skirmish') {
-      this.world.setLayout('arena');
+    if (mode === 'zombie') {
+      this._ensureGraveyard();
+      this._useWorld(this.graveyard);
+      this.skirmish.deactivate();
+      this.zombie.activate(this.graveyard);
+    } else if (mode === 'skirmish') {
+      this._useWorld(this.range);
+      this.range.setLayout('arena');
+      this.zombie.deactivate();
       this.skirmish.activate();
     } else {
-      this.world.setLayout('practice');
+      this._useWorld(this.range);
+      this.range.setLayout('practice');
+      this.zombie.deactivate();
       this.skirmish.deactivate();
     }
+  }
+
+  _ensureGraveyard() {
+    if (!this.graveyard) this.graveyard = new Graveyard(this.engine.scene);
+  }
+
+  /** Make `world` the active world: toggle visibility, re-tint atmosphere, and
+   *  re-point every system that holds a world reference. Collision reads
+   *  `this.world` live each step, so this is all that's needed. */
+  _useWorld(world) {
+    if (this.world && this.world !== world && this.world.group) this.world.group.visible = false;
+    this.world = world;
+    if (world.group) world.group.visible = true;
+    if (world.enter) world.enter(this.engine.scene, this.lights);
+    this.cameraRig.setWorld(world);
+    this.firing.world = world;
+    this.abilities.world = world;
+    this.bots.range = world;
+    if (this.minimap && this.minimap.setWorld) this.minimap.setWorld(world);
   }
 
   _wireLock() {
@@ -276,9 +344,10 @@ export class Game {
       this.audio.inspect();
     }
 
-    // skirmish round logic (enemy AI, scoring); freezes the player between rounds
+    // skirmish / zombie round logic; either may freeze the player between rounds
     this.skirmish.update(dt);
-    const frozen = this.skirmish.playerFrozen();
+    this.zombie.update(dt);
+    const frozen = this.skirmish.playerFrozen() || this.zombie.playerFrozen();
 
     // radio comms wheel: hold ` to open, mouse to aim a slice, release to send.
     // While open the look deltas drive the selector instead of the view.
@@ -318,6 +387,13 @@ export class Game {
       lookDY: this.input.mouseDY,
     });
     this.cameraRig.updateTransform(dt); // position camera after the player has moved
+    if (this.zombie.cinematicActive) {
+      this.zombie.updateCinematicCamera(this.engine.camera, dt); // boss entrance
+      if (!this._cineGunHidden) { this.viewModel.setVisible(false); this._cineGunHidden = true; }
+    } else if (this._cineGunHidden) {
+      this.viewModel.setVisible(this.cameraRig.mode === 'first');
+      this._cineGunHidden = false;
+    }
 
     // blind the screen when the camera is inside a smoke cloud
     this.hud.setSmoke(this.abilities.visionObscure(this.engine.camera.position));

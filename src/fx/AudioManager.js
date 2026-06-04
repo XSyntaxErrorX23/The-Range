@@ -125,6 +125,9 @@ export class AudioManager {
 
   empty() { if (this.ctx) this._tone('square', 900, 0.04, 0.08, 700); }
   inspect() { if (this.ctx) { this._noiseBurst(0.12, 'bandpass', 800, 0.05); this._tone('square', 230, 0.05, 0.05, 300); } }
+  zombieAttack() { if (this.ctx) { this._noiseBurst(0.18, 'lowpass', 480, 0.16); this._tone('sawtooth', 95, 0.18, 0.12, 55); } }
+  pickupChime() { if (this.ctx) { this._tone('sine', 620, 0.08, 0.1, 980); setTimeout(() => { if (this.ctx) this._tone('sine', 940, 0.09, 0.09, 1320); }, 70); } }
+  bossRoar() { if (this.ctx) { this._noiseBurst(0.6, 'lowpass', 320, 0.3); this._tone('sawtooth', 60, 0.6, 0.22, 42); this._tone('square', 120, 0.4, 0.1, 70); } }
   hit() { if (this.ctx) this._tone('sine', 760, 0.07, 0.12, 600); }
   headshot() { if (this.ctx) { this._tone('sine', 1180, 0.09, 0.16, 880); this._tone('triangle', 1760, 0.07, 0.08); } }
   kill() { if (this.ctx) { this._tone('sine', 520, 0.16, 0.18, 320); this._tone('square', 780, 0.1, 0.08, 520); } }
@@ -141,5 +144,8 @@ export class AudioManager {
     bus.on(EV.ACCURACY_SCORE, ({ score }) => {
       if (this.ctx) this._tone('sine', 500 + score * 6, 0.07, 0.12, 700 + score * 8);
     });
+    bus.on(EV.ZOMBIE_ATTACK, () => this.zombieAttack());
+    bus.on(EV.PICKUP, () => this.pickupChime());
+    bus.on(EV.ZOMBIE_ANNOUNCE, ({ sub }) => { if (sub === 'Final boss') this.bossRoar(); });
   }
 }

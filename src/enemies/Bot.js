@@ -59,6 +59,7 @@ export class Bot {
     this.armed = false;
     this.weaponId = null;
     this._gun = null;
+    this.pose = 'default'; // 'default' | 'zombie' (hunched, arms reaching)
   }
 
   /** Attach/replace a held weapon model (puts the bot into an aiming pose). */
@@ -92,9 +93,6 @@ export class Bot {
 
   _buildVisual() {
     const v = this.visual;
-    const base = this._mesh(new THREE.CylinderGeometry(0.46, 0.52, 0.08, 24), this.darkMat, 0, 0.04, 0, false);
-    base.receiveShadow = true;
-    v.add(base);
 
     // legs (pivot at hips)
     this.parts.leftLeg = this._limb(v, -0.16, 0.92, 0.13, 0.1, 0.92, this.darkMat);
@@ -238,6 +236,8 @@ export class Bot {
     p.torso.scale.y = 1 + Math.sin(t * 2.2) * 0.025;
     // head idle scan
     p.head.rotation.y = Math.sin(t * 0.7) * 0.13;
+    // zombies push the head forward so it stays over the hunched chest (not behind it)
+    p.head.position.z = this.pose === 'zombie' ? 0.16 : 0;
 
     // walk cycle: amplitude scales with strafe speed (no turnaround twitch); the
     // phase always advances so legs never snap. inten 0 => idle.
@@ -248,7 +248,12 @@ export class Bot {
     const idle = Math.sin(t * 1.4) * 0.05 * (1 - inten);
     p.leftLeg.rotation.x = s * amp;
     p.rightLeg.rotation.x = -s * amp;
-    if (this.armed) {
+    if (this.pose === 'zombie') {
+      // arms reaching out for the player, with a little sway
+      const sway = Math.sin(t * 3) * 0.12;
+      p.leftArm.rotation.set(-1.5 + sway, 0, 0.3);
+      p.rightArm.rotation.set(-1.5 - sway, 0, -0.26);
+    } else if (this.armed) {
       // both hands forward, gripping the held weapon toward the target
       p.leftArm.rotation.set(-1.18, 0, 0.22);
       p.rightArm.rotation.set(-1.28, 0, -0.12);
@@ -259,15 +264,17 @@ export class Bot {
     const dir = Math.sign(this.strafeVel) || 0;
     this.visual.rotation.z = damp(this.visual.rotation.z, -dir * 0.13 * inten, 10, dt);
 
-    // hit flinch (lean back briefly)
+    // hit flinch (lean back briefly); zombies otherwise hunch forward + look down
+    const baseLean = this.pose === 'zombie' ? 0.16 : 0;
+    const baseHead = this.pose === 'zombie' ? 0.18 : 0;
     if (this.flinch > 0) {
       this.flinch = Math.max(0, this.flinch - dt);
       const f = this.flinch / 0.14;
-      p.torso.rotation.x = -0.28 * f;
-      p.head.rotation.x = -0.22 * f;
+      p.torso.rotation.x = baseLean - 0.28 * f;
+      p.head.rotation.x = baseHead - 0.22 * f;
     } else {
-      p.torso.rotation.x = damp(p.torso.rotation.x, 0, 12, dt);
-      p.head.rotation.x = damp(p.head.rotation.x, 0, 12, dt);
+      p.torso.rotation.x = damp(p.torso.rotation.x, baseLean, 12, dt);
+      p.head.rotation.x = damp(p.head.rotation.x, baseHead, 12, dt);
     }
   }
 
