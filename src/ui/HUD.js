@@ -142,6 +142,58 @@ export class HUD {
     this.scope = this._el('div'); this.scope.id = 'scope';
     this.scope.innerHTML = '<div class="scope-ring"></div><div class="scope-cross-h"></div><div class="scope-cross-v"></div><div class="scope-dot"></div>';
     this.root.appendChild(this.scope);
+
+    // skirmish: duel scoreboard + enemy health bar (hidden outside skirmish)
+    this.duelbar = this._el('div'); this.duelbar.id = 'duelbar';
+    this.duelbar.innerHTML =
+      '<span class="du-side">YOU</span><span class="du-score" id="du-p">0</span>' +
+      '<span class="du-dash">—</span>' +
+      '<span class="du-score enemy" id="du-e">0</span><span class="du-side">ENEMY</span>' +
+      '<span class="du-target" id="du-target"></span>';
+    this.root.appendChild(this.duelbar);
+
+    this.enemyhp = this._el('div'); this.enemyhp.id = 'enemyhp';
+    this.enemyhp.innerHTML = '<span class="eh-name" id="eh-name">ENEMY</span><div class="eh-bar"><div id="eh-fill"></div></div>';
+    this.root.appendChild(this.enemyhp);
+
+    // damage feedback + round announcements
+    this.hurt = this._el('div'); this.hurt.id = 'hurt';
+    this.root.appendChild(this.hurt);
+    this.announce = this._el('div'); this.announce.id = 'announce';
+    this.root.appendChild(this.announce);
+    this._lastHealth = 100;
+  }
+
+  setHealth({ health, armor }) {
+    const hp = document.getElementById('hp');
+    if (hp) hp.textContent = String(Math.max(0, Math.round(health)));
+    const shield = this.health.querySelector('.hp-shield');
+    if (shield) shield.textContent = armor > 0 ? '◆◆' : '';
+    if (health < this._lastHealth) this._flash(this.hurt);
+    this._lastHealth = health;
+  }
+
+  setSkirmish(s) {
+    this.duelbar.classList.toggle('show', s.active);
+    this.enemyhp.classList.toggle('show', s.active);
+    if (!s.active) return;
+    document.getElementById('du-p').textContent = String(s.playerScore);
+    document.getElementById('du-e').textContent = String(s.enemyScore);
+    document.getElementById('du-target').textContent = 'FIRST TO ' + s.target;
+    document.getElementById('eh-name').textContent = (s.enemyName || 'ENEMY').toUpperCase();
+    const fill = document.getElementById('eh-fill');
+    if (fill) fill.style.width = Math.max(0, Math.round(100 * s.enemyHealth / (s.enemyMax || 100))) + '%';
+  }
+
+  announceShow(text, sub) {
+    this.announce.innerHTML = `<div class="an-main">${text}</div>` + (sub ? `<div class="an-sub">${sub}</div>` : '');
+    this._flash(this.announce);
+  }
+
+  _flash(el) {
+    el.classList.remove('show');
+    void el.offsetWidth; // reflow to restart the animation
+    el.classList.add('show');
   }
 
   _applyCrosshairStyle() {
@@ -280,5 +332,8 @@ export class HUD {
     bus.on(EV.SCORE_UPDATE, (s) => this.setScore(s));
     bus.on(EV.CAMERA_MODE, (mode) => this.setViewMode(mode));
     bus.on(EV.RANGE_SETTINGS, (snap) => this.setRangePanel(snap));
+    bus.on(EV.PLAYER_HEALTH, (h) => this.setHealth(h));
+    bus.on(EV.SKIRMISH_STATE, (s) => this.setSkirmish(s));
+    bus.on(EV.SKIRMISH_ANNOUNCE, (a) => this.announceShow(a.text, a.sub));
   }
 }

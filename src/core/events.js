@@ -47,6 +47,13 @@ export const EV = {
   COMBAT_HEADSHOT: 'combat:headshot', // { damage, point }
   COMBAT_KILL: 'combat:kill', // { bot }
   COMBAT_MISS: 'combat:miss', // { point, normal }
+  COMBAT_SLASH: 'combat:slash', // melee hit a surface — { point, normal }
+  PLAYER_HEALTH: 'player:health', // { health, armor, max }
+  PLAYER_DEAD: 'player:dead', // { byHead }
+  ENEMY_FIRED: 'enemy:fired', // skirmish AI shot — { from, to, hit }
+  SKIRMISH_STATE: 'skirmish:state', // { active, playerScore, enemyScore, target, enemyName, enemyHealth, enemyMax }
+  SKIRMISH_ANNOUNCE: 'skirmish:announce', // { text, sub }
+  SKIRMISH_END: 'skirmish:end', // { win, playerScore, enemyScore }
   CAMERA_MODE: 'camera:modechanged', // 'first' | 'third'
   SCORE_UPDATE: 'score:update', // ScoreManager state
   RANGE_SETTINGS: 'range:settings', // Settings snapshot

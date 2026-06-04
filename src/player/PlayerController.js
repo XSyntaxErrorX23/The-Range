@@ -30,6 +30,15 @@ export class PlayerController {
 
   update(dt) {
     const p = this.player;
+
+    // dead (skirmish): no input, bleed to a stop, keep falling
+    if (!p.alive) {
+      p.velocity.x = 0;
+      p.velocity.z = 0;
+      p.velocity.y -= this.GRAVITY * dt;
+      return;
+    }
+
     const yaw = this.cameraRig.yaw;
 
     // movement basis from yaw only (horizontal)

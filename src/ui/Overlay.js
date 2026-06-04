@@ -37,6 +37,8 @@ export class Overlay {
     this.onBuy = () => {};
     this.getLoadout = () => ({});
     this.onReset = () => {};
+    this.onRematch = () => {};
+    this.onExitSkirmish = () => {};
 
     this._build();
     this._buyKeyHandler = this._buyKeyHandler.bind(this);
@@ -135,6 +137,19 @@ export class Overlay {
     cp.appendChild(this._btn('BACK', 'secondary', () => this.showPause()));
     this.controls.appendChild(cp);
 
+    // ---- skirmish result ----
+    this.result = this._modal('m-result');
+    const rp = document.createElement('div'); rp.className = 'panel';
+    this.resultTitle = this._el('h1', 'result-title', 'VICTORY');
+    this.resultScore = this._el('div', 'result-score', '0 — 0');
+    rp.appendChild(this.resultTitle);
+    rp.appendChild(this.resultScore);
+    rp.appendChild(document.createElement('br'));
+    rp.appendChild(this._btn('REMATCH', 'big', () => this.onRematch()));
+    rp.appendChild(document.createElement('br'));
+    rp.appendChild(this._btn('EXIT TO RANGE', 'secondary', () => this.onExitSkirmish()));
+    this.result.appendChild(rp);
+
     // ---- buy menu (Armory) ----
     this.buymenu = this._modal('m-buy');
     const bp = document.createElement('div'); bp.className = 'panel buymenu';
@@ -170,7 +185,8 @@ export class Overlay {
     p.appendChild(this._slider('Crosshair Gap', 1, 16, 1, s.crosshairGap, (v) => { s.set('crosshairGap', v); }, (v) => String(v)));
 
     p.appendChild(this._select('View', [['first', 'First person'], ['third', 'Third person']], s.view, (v) => s.set('view', v)));
-    p.appendChild(this._select('Bot Mode', [['static', 'Static'], ['strafe', 'Strafing'], ['popup', 'Pop-up drill']], s.botMode, (v) => s.set('botMode', v)));
+    p.appendChild(this._select('Bot Mode', [['static', 'Static'], ['strafe', 'Strafing'], ['popup', 'Pop-up drill'], ['skirmish', 'Skirmish (1v1)']], s.botMode, (v) => s.set('botMode', v)));
+    p.appendChild(this._select('AI Difficulty', [['easy', 'Easy'], ['medium', 'Medium'], ['hard', 'Hard']], s.aiDifficulty, (v) => s.set('aiDifficulty', v)));
     p.appendChild(this._toggle('Bot Armor', s.botArmor, (v) => s.set('botArmor', v)));
     p.appendChild(this._toggle('Infinite Ammo', s.infiniteAmmo, (v) => s.set('infiniteAmmo', v)));
 
@@ -255,6 +271,13 @@ export class Overlay {
 
   showStart() { this._show(this.start); }
   showPause() { this._show(this.pause); }
+
+  showResult({ win, playerScore, enemyScore }) {
+    this.resultTitle.textContent = win ? 'VICTORY' : 'DEFEAT';
+    this.resultTitle.classList.toggle('lose', !win);
+    this.resultScore.textContent = `${playerScore} — ${enemyScore}`;
+    this._show(this.result);
+  }
   openSettings() { this._buildSettings(); this._show(this.settingsModal); }
   openControls() { this._show(this.controls); }
   openPatchNotes() { this._show(this.patchnotes); }
@@ -279,7 +302,7 @@ export class Overlay {
 
   hideAll() {
     window.removeEventListener('keydown', this._buyKeyHandler);
-    for (const m of [this.start, this.pause, this.settingsModal, this.controls, this.buymenu, this.patchnotes]) {
+    for (const m of [this.start, this.pause, this.settingsModal, this.controls, this.buymenu, this.patchnotes, this.result]) {
       m.classList.remove('show');
     }
     this.current = null;

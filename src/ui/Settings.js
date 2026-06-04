@@ -11,7 +11,8 @@ const DEFAULTS = {
   infiniteAmmo: true, // matches the reference "Infinite Ammo ENABLED"
   crosshairColor: '#46e0d6',
   crosshairGap: 6,
-  botMode: 'static', // static | strafe | popup
+  botMode: 'static', // static | strafe | popup | skirmish
+  aiDifficulty: 'hard', // skirmish opponent: easy | medium | hard
   ign: 'Agent', // in-game name (shown in killfeed)
   seenWelcome: false, // onboarding shown once
 };

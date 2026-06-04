@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bus, EV } from '../core/events.js';
 
 /**
  * Player state + a simple third-person body mesh (hidden in first-person).
@@ -10,6 +11,12 @@ export class Player {
     this.velocity = new THREE.Vector3();
     this.grounded = true;
     this.crouching = false;
+
+    // combat state (only damaged in skirmish mode; full HP otherwise)
+    this.maxHealth = 100;
+    this.health = 100;
+    this.armor = 0;
+    this.alive = true;
 
     this.radius = 0.4;
     this.standHeight = 1.8;
@@ -44,6 +51,42 @@ export class Player {
 
   eyePosition() {
     return this._eye.copy(this.position).setY(this.position.y + this.eyeHeight);
+  }
+
+  /** Respawn at a position with full health (skirmish round start). */
+  spawnReset(pos, { armor = 0 } = {}) {
+    this.position.copy(pos);
+    this.velocity.set(0, 0, 0);
+    this.eyeHeight = this.eyeStand;
+    this.crouching = false;
+    this.grounded = true;
+    this.health = this.maxHealth;
+    this.armor = armor;
+    this.alive = true;
+    this._emitHealth();
+  }
+
+  /** Apply incoming damage; armor soaks ~2/3 of it. Returns true if this kills. */
+  takeDamage(dmg, head = false) {
+    if (!this.alive) return false;
+    let remaining = dmg;
+    if (this.armor > 0) {
+      const soak = Math.min(this.armor, Math.round(dmg * 0.66));
+      this.armor -= soak;
+      remaining -= soak;
+    }
+    this.health = Math.max(0, this.health - remaining);
+    this._emitHealth();
+    if (this.health <= 0) {
+      this.alive = false;
+      bus.emit(EV.PLAYER_DEAD, { byHead: head });
+      return true;
+    }
+    return false;
+  }
+
+  _emitHealth() {
+    bus.emit(EV.PLAYER_HEALTH, { health: this.health, armor: this.armor, max: this.maxHealth });
   }
 
   /** Keep the visible body aligned with the player (third-person only). */

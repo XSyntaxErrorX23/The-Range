@@ -14,6 +14,7 @@ import { ViewModel } from '../weapons/ViewModel.js';
 import { WeaponManager } from '../weapons/WeaponManager.js';
 import { FiringController } from '../weapons/FiringController.js';
 import { BotManager } from '../enemies/BotManager.js';
+import { Skirmish } from '../modes/Skirmish.js';
 import { AudioManager } from '../fx/AudioManager.js';
 import { FXManager } from '../fx/FXManager.js';
 import { Settings } from '../ui/Settings.js';
@@ -52,8 +53,19 @@ export class Game {
       bots: this.bots,
       world: this.world,
       viewModel: this.viewModel,
+      player: this.player,
     });
     this.playerCtl = new PlayerController(this.player, this.input, this.cameraRig, this.weapons);
+
+    // 1v1 skirmish coordinator (dormant until bot mode === 'skirmish')
+    this.skirmish = new Skirmish({
+      scene: this.engine.scene,
+      world: this.world,
+      player: this.player,
+      cameraRig: this.cameraRig,
+      bots: this.bots,
+      settings: this.settings,
+    });
 
     // UI / FX (HUD builds #damage-layer that FXManager uses — build HUD first)
     this.hud = new HUD(document.getElementById('hud'), this.settings);
@@ -93,7 +105,7 @@ export class Game {
     if (this.settings.view === 'third' && this.cameraRig.mode === 'first') this.cameraRig.toggle();
     this.viewModel.setVisible(this.cameraRig.mode === 'first');
     this.audio.setVolume(this.settings.volume);
-    this.bots.setMode(this.settings.botMode);
+    this._setMode(this.settings.botMode);
     this.hud.setRangePanel(this.settings.snapshot());
     this.hud.setViewMode(this.cameraRig.mode);
     // push initial weapon/ammo to the HUD (WeaponManager equipped before HUD existed)
@@ -107,6 +119,21 @@ export class Game {
     this.overlay.onBuy = (id) => this.weapons.setLoadout(id);
     this.overlay.getLoadout = () => ({ primaryId: this.weapons.primaryId, sidearmId: this.weapons.sidearmId });
     this.overlay.onReset = () => this.score.reset();
+    this.overlay.onRematch = () => { this.skirmish.rematch(); this.input.requestLock(); };
+    this.overlay.onExitSkirmish = () => { this.settings.set('botMode', 'static'); this.input.requestLock(); };
+
+    // match over -> show the result screen (unlock so the cursor returns)
+    this.skirmish.onMatchEnd = (win) => {
+      this.overlay.showResult({ win, playerScore: this.skirmish.playerScore, enemyScore: this.skirmish.enemyScore });
+      this.input.exitLock();
+    };
+  }
+
+  /** Switch range mode, activating/deactivating the skirmish coordinator. */
+  _setMode(mode) {
+    this.bots.setMode(mode);
+    if (mode === 'skirmish') this.skirmish.activate();
+    else this.skirmish.deactivate();
   }
 
   _wireLock() {
@@ -142,7 +169,10 @@ export class Game {
           this.audio.setVolume(value);
           break;
         case 'botMode':
-          this.bots.setMode(value);
+          this._setMode(value);
+          break;
+        case 'aiDifficulty':
+          this.skirmish.setDifficulty(value);
           break;
         case 'infiniteAmmo':
           this.weapons._emitAmmo();
@@ -180,16 +210,27 @@ export class Game {
       this.input.exitLock();
     }
 
+    // skirmish round logic (enemy AI, scoring); freezes the player between rounds
+    this.skirmish.update(dt);
+    const frozen = this.skirmish.playerFrozen();
+
     // look first so movement basis + aim ray use this frame's orientation
     this.cameraRig.consumeLook(dt);
 
-    this.playerCtl.update(dt); // computes velocity (does not integrate)
-    this.abilities.update(dt); // may add dash/updraft velocity
+    if (frozen) {
+      // between rounds / dead: hold still but keep settling to the ground
+      this.player.velocity.x = 0;
+      this.player.velocity.z = 0;
+      this.player.velocity.y -= this.playerCtl.GRAVITY * dt;
+    } else {
+      this.playerCtl.update(dt); // computes velocity (does not integrate)
+      this.abilities.update(dt); // may add dash/updraft velocity
+    }
     this.player._prevY = this.player.position.y; // for fast-fall landing detection
     this.player.position.addScaledVector(this.player.velocity, dt); // integrate
     resolveCollision(this.player, this.world);
     this.weapons.update(dt);
-    this.firing.update(dt);
+    if (!frozen) this.firing.update(dt);
     this.bots.update(dt);
     // animate gun (pose/ADS/recoil kick/reload/swing + bob & look sway)
     this.viewModel.update(dt, {

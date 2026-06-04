@@ -14,6 +14,9 @@ export class FXManager {
 
     this._tmp = new THREE.Vector3();
     this._proj = new THREE.Vector3();
+    this._streak = new THREE.Vector3();
+    this._sp = new THREE.Vector3();
+    this._aux = new THREE.Vector3();
 
     this._initTracers(28);
     this._initImpacts(28);
@@ -98,6 +101,19 @@ export class FXManager {
     m.position.copy(point).addScaledVector(normal, 0.012);
     m.lookAt(this._tmp.copy(point).add(normal));
     m.visible = true;
+  }
+
+  /** Melee scuff: a short streak of decals along the surface, plus a steely spark. */
+  scratch(point, normal) {
+    if (!normal) return;
+    // a tangent lying in the surface (any non-parallel vector crossed with the normal)
+    this._aux.set(normal.y, normal.z, normal.x);
+    this._streak.crossVectors(normal, this._aux).normalize();
+    for (let i = -1; i <= 1; i++) {
+      this._sp.copy(point).addScaledVector(this._streak, i * 0.05);
+      this.decal(this._sp, normal);
+    }
+    this.impact(point, 0xcfd6da);
   }
 
   // ---------- muzzle flash ----------
@@ -202,5 +218,7 @@ export class FXManager {
       this.impact(point, 0xfff0c0);
       this.decal(point, normal);
     });
+    bus.on(EV.COMBAT_SLASH, ({ point, normal }) => this.scratch(point, normal));
+    bus.on(EV.ENEMY_FIRED, ({ from: f, to }) => this.tracer(f, to)); // incoming shot tracer
   }
 }

@@ -29,10 +29,14 @@ export class BotManager {
     this.respawnDelay = 1.4;
     this.spawnCooldown = 0;
     this.time = 0;
+
+    this.skirmish = false;        // skirmish mode -> no practice dummies
+    this.skirmishEnemyBot = null; // the duel opponent's Bot (set by Skirmish)
   }
 
   setMode(mode) {
     this.mode = mode;
+    this.skirmish = mode === 'skirmish';
     for (const b of this.pool) b.hide();
     this.spawnCooldown = 0;
     this._dirty = true;
@@ -43,6 +47,11 @@ export class BotManager {
     // only fully-risen bots are shootable (during the rise animation the visual
     // is still scaling up from the floor, so its colliders shouldn't count yet)
     this.targetList.length = 0;
+    if (this.skirmish) {
+      const e = this.skirmishEnemyBot;
+      if (e && e.alive && e.state === 'alive') this.targetList.push(...e.colliderMeshes());
+      return;
+    }
     for (const b of this.pool) {
       if (b.alive && b.state === 'alive') this.targetList.push(...b.colliderMeshes());
     }
@@ -100,10 +109,12 @@ export class BotManager {
       }
     }
 
-    const target = this.mode === 'popup' ? this.popupActive : this.maxActive;
-    if (activeCount < target && this.spawnCooldown <= 0) {
-      this._spawnOne();
-      this.spawnCooldown = this.mode === 'popup' ? 0.7 : this.respawnDelay;
+    if (!this.skirmish) {
+      const target = this.mode === 'popup' ? this.popupActive : this.maxActive;
+      if (activeCount < target && this.spawnCooldown <= 0) {
+        this._spawnOne();
+        this.spawnCooldown = this.mode === 'popup' ? 0.7 : this.respawnDelay;
+      }
     }
 
     // small bot count — rebuild each frame so rising->alive transitions register

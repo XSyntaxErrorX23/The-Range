@@ -11,13 +11,14 @@ const WORLD_RIGHT = new THREE.Vector3(1, 0, 0);
  * combat events. Reads weapon state from WeaponManager.
  */
 export class FiringController {
-  constructor({ input, cameraRig, weapons, bots, world, viewModel }) {
+  constructor({ input, cameraRig, weapons, bots, world, viewModel, player }) {
     this.input = input;
     this.cameraRig = cameraRig;
     this.weapons = weapons;
     this.bots = bots;
     this.world = world;
     this.viewModel = viewModel;
+    this.player = player;
 
     this.cooldown = 0;
     this._burst = null; // in-progress alt-fire burst { id, left, timer }
@@ -32,6 +33,7 @@ export class FiringController {
 
   update(dt) {
     if (this.cooldown > 0) this.cooldown -= dt;
+    if (this.player && !this.player.alive) { this._burst = null; return; } // dead in skirmish
 
     const wm = this.weapons;
     const w = wm.weapon;
@@ -185,16 +187,29 @@ export class FiringController {
     this.raycaster.set(this._origin, this._dir);
     this.raycaster.near = 0;
     this.raycaster.far = w.meleeRange;
-    const hit = this.raycaster.intersectObjects(this.bots.targetList, false)[0] || null;
-    if (!hit) return;
-    const bot = hit.object.userData.bot;
-    const zone = hit.object.userData.hitZone || 'body';
-    if (!bot || !bot.alive) return;
-    const mult = zone === 'head' ? w.headshotMult : zone === 'leg' ? (w.legMult || 1) : 1;
-    const dmg = Math.round(w.damage * mult);
-    const dead = bot.takeDamage(dmg, zone, hit.point);
-    bus.emit(EV.COMBAT_HIT, { zone, damage: dmg, point: hit.point.clone(), dead, bot, from: null });
-    if (zone === 'head') bus.emit(EV.COMBAT_HEADSHOT, { damage: dmg, point: hit.point.clone() });
-    if (dead) bus.emit(EV.COMBAT_KILL, { bot });
+    const botHit = this.raycaster.intersectObjects(this.bots.targetList, false)[0] || null;
+    const worldHit = this.raycaster.intersectObjects(this.world.solids, false)[0] || null;
+
+    // bot takes priority when it's the closer surface
+    if (botHit && (!worldHit || botHit.distance <= worldHit.distance)) {
+      const bot = botHit.object.userData.bot;
+      const zone = botHit.object.userData.hitZone || 'body';
+      if (!bot || !bot.alive) return;
+      const mult = zone === 'head' ? w.headshotMult : zone === 'leg' ? (w.legMult || 1) : 1;
+      const dmg = Math.round(w.damage * mult);
+      const dead = bot.takeDamage(dmg, zone, botHit.point);
+      bus.emit(EV.COMBAT_HIT, { zone, damage: dmg, point: botHit.point.clone(), dead, bot, from: null });
+      if (zone === 'head') bus.emit(EV.COMBAT_HEADSHOT, { damage: dmg, point: botHit.point.clone() });
+      if (dead) bus.emit(EV.COMBAT_KILL, { bot });
+      return;
+    }
+
+    // hit a wall/box instead -> leave a scratch mark
+    if (worldHit) {
+      bus.emit(EV.COMBAT_SLASH, {
+        point: worldHit.point.clone(),
+        normal: worldHit.face ? worldHit.face.normal.clone() : null,
+      });
+    }
   }
 }
