@@ -43,16 +43,27 @@ export class FXManager {
     this._tracerI = 0;
   }
 
-  tracer(from, to) {
+  tracer(from, to, color = 0xfff1c4) {
     const t = this.tracers[this._tracerI];
     this._tracerI = (this._tracerI + 1) % this.tracers.length;
     const pos = t.line.geometry.attributes.position;
     pos.setXYZ(0, from.x, from.y, from.z);
     pos.setXYZ(1, to.x, to.y, to.z);
     pos.needsUpdate = true;
+    t.line.material.color.setHex(color);
     t.line.material.opacity = 0.9;
     t.line.visible = true;
     t.life = 0.06;
+  }
+
+  /** Explosion: a bright central flash + a ring of sparks (bazooka blast). */
+  explosion(point, radius = 4) {
+    this.impact(point, 0xffd27a);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      this._aux.set(point.x + Math.cos(a) * radius * 0.5, point.y + (Math.random() - 0.3) * radius * 0.4, point.z + Math.sin(a) * radius * 0.5);
+      this.impact(this._aux, i % 2 ? 0xff7a2a : 0xffb030);
+    }
   }
 
   // ---------- impact sparks ----------
@@ -240,16 +251,17 @@ export class FXManager {
   _wire() {
     const from = new THREE.Vector3();
     bus.on(EV.COMBAT_FIRED, ({ weapon }) => { if (weapon.type !== 'melee' && weapon.category !== 'special') this.muzzleFlash(); });
-    bus.on(EV.COMBAT_HIT, ({ point, damage, zone, from: shotFrom }) => {
-      if (shotFrom) this.tracer(this.muzzleWorld(from), point);
+    bus.on(EV.COMBAT_HIT, ({ point, damage, zone, from: shotFrom, color }) => {
+      if (shotFrom) this.tracer(this.muzzleWorld(from), point, color);
       this.impact(point, zone === 'head' ? 0xff5566 : 0xffd27a);
       this.damageNumber(point, damage, zone === 'head');
     });
-    bus.on(EV.COMBAT_MISS, ({ point, normal, from: shotFrom }) => {
-      if (shotFrom) this.tracer(this.muzzleWorld(from), point);
+    bus.on(EV.COMBAT_MISS, ({ point, normal, from: shotFrom, color }) => {
+      if (shotFrom) this.tracer(this.muzzleWorld(from), point, color);
       this.impact(point, 0xfff0c0);
       this.decal(point, normal);
     });
+    bus.on(EV.COMBAT_SPLASH, ({ point, radius }) => this.explosion(point, radius));
     bus.on(EV.COMBAT_SLASH, ({ point, normal }) => this.scratch(point, normal));
     bus.on(EV.ENEMY_FIRED, ({ from: f, to }) => this.tracer(f, to)); // incoming shot tracer
     bus.on(EV.ACCURACY_SCORE, ({ score, point }) => this.scoreNumber(point, score));

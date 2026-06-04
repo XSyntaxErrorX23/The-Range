@@ -275,7 +275,14 @@ export class ZombieSurvival {
     if (this.spawnTimer > 0) return;
     this.spawnTimer = SPAWN_INTERVAL;
     const sp = this.world.zombieSpawns[Math.floor(Math.random() * this.world.zombieSpawns.length)];
-    this._spawnZombie(sp, { health: this._waveHealth, speed: this._waveSpeed, dmg: this._waveDmg });
+    const opts = { health: this._waveHealth, speed: this._waveSpeed, dmg: this._waveDmg, type: 'normal' };
+    // brutes & flyers join the horde once endless content is unlocked
+    if (this.endless) {
+      const r = Math.random();
+      if (r < 0.16) { opts.type = 'brute'; opts.health = Math.round(opts.health * 2.6); opts.speed *= 0.7; opts.dmg = Math.round(opts.dmg * 1.8); }
+      else if (r < 0.44) { opts.type = 'flyer'; opts.health = Math.round(opts.health * 0.6); opts.speed *= 1.4; }
+    }
+    this._spawnZombie(sp, opts);
     this.toSpawn--;
   }
 

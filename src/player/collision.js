@@ -46,9 +46,13 @@ export function resolveCollision(player, world) {
     if (d2 < r * r) {
       if (d2 > 1e-6) {
         const d = Math.sqrt(d2);
-        const push = (r - d) / d;
-        p.x += dx * push;
-        p.z += dz * push;
+        const nx = dx / d, nz = dz / d;
+        p.x += nx * (r - d);
+        p.z += nz * (r - d);
+        // cancel the velocity component INTO the surface so we slide along it
+        // instead of vibrating against it (which jitters the first-person camera)
+        const vn = player.velocity.x * nx + player.velocity.z * nz;
+        if (vn < 0) { player.velocity.x -= vn * nx; player.velocity.z -= vn * nz; }
       } else {
         const toMinX = p.x - b.minX, toMaxX = b.maxX - p.x;
         const toMinZ = p.z - b.minZ, toMaxZ = b.maxZ - p.z;

@@ -132,6 +132,7 @@ export class AudioManager {
   headshot() { if (this.ctx) { this._tone('sine', 1180, 0.09, 0.16, 880); this._tone('triangle', 1760, 0.07, 0.08); } }
   kill() { if (this.ctx) { this._tone('sine', 520, 0.16, 0.18, 320); this._tone('square', 780, 0.1, 0.08, 520); } }
   ui() { if (this.ctx) this._tone('sine', 660, 0.04, 0.06, 880); }
+  explosion() { if (this.ctx) { this._noiseBurst(0.5, 'lowpass', 420, 0.45); this._tone('sawtooth', 90, 0.45, 0.3, 40); this._tone('square', 150, 0.25, 0.12, 60); } }
 
   _wire() {
     bus.on(EV.COMBAT_FIRED, ({ weapon }) => this.gunshot(weapon));
@@ -144,6 +145,7 @@ export class AudioManager {
     bus.on(EV.ACCURACY_SCORE, ({ score }) => {
       if (this.ctx) this._tone('sine', 500 + score * 6, 0.07, 0.12, 700 + score * 8);
     });
+    bus.on(EV.COMBAT_SPLASH, () => this.explosion());
     bus.on(EV.ZOMBIE_ATTACK, () => this.zombieAttack());
     bus.on(EV.PICKUP, () => this.pickupChime());
     bus.on(EV.ZOMBIE_ANNOUNCE, ({ sub }) => { if (sub === 'Final boss') this.bossRoar(); });

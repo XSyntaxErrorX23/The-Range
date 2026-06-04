@@ -101,35 +101,44 @@ export class Bot {
     this.parts.leftLeg.add(this._mesh(new THREE.BoxGeometry(0.18, 0.1, 0.3), this.darkMat, 0, -0.9, 0.06));
     this.parts.rightLeg.add(this._mesh(new THREE.BoxGeometry(0.18, 0.1, 0.3), this.darkMat, 0, -0.9, 0.06));
 
-    // pelvis + torso
-    v.add(this._mesh(new THREE.BoxGeometry(0.42, 0.22, 0.32), this.darkMat, 0, 1.0, 0));
-    const torso = this._mesh(new THREE.CapsuleGeometry(0.3, 0.5, 6, 16), this.bodyMat, 0, 1.42, 0);
+    // pelvis + torso (shorter torso so the head sits clearly above the shoulders)
+    v.add(this._mesh(new THREE.BoxGeometry(0.44, 0.26, 0.32), this.darkMat, 0, 0.97, 0));
+    const torso = this._mesh(new THREE.CapsuleGeometry(0.27, 0.26, 6, 16), this.bodyMat, 0, 1.24, 0);
     this.parts.torso = torso;
     v.add(torso);
+    // broad chest / upper body (flat top defines the shoulder line)
+    v.add(this._mesh(new THREE.BoxGeometry(0.6, 0.46, 0.26), this.bodyMat, 0, 1.42, 0.02));
     // chest plate
-    v.add(this._mesh(new THREE.BoxGeometry(0.5, 0.42, 0.16), this.bodyMat, 0, 1.45, 0.22));
+    v.add(this._mesh(new THREE.BoxGeometry(0.5, 0.4, 0.16), this.bodyMat, 0, 1.4, 0.2));
     // belt accent
-    v.add(this._mesh(new THREE.BoxGeometry(0.46, 0.08, 0.34), this.visorMat, 0, 1.16, 0));
+    v.add(this._mesh(new THREE.BoxGeometry(0.46, 0.08, 0.34), this.visorMat, 0, 1.03, 0));
 
     // shoulders + arms (pivot at shoulders)
-    v.add(this._mesh(new THREE.SphereGeometry(0.16, 12, 10), this.bodyMat, -0.4, 1.62, 0));
-    v.add(this._mesh(new THREE.SphereGeometry(0.16, 12, 10), this.bodyMat, 0.4, 1.62, 0));
-    this.parts.leftArm = this._limb(v, -0.42, 1.6, 0.11, 0.09, 0.72, this.bodyMat);
-    this.parts.rightArm = this._limb(v, 0.42, 1.6, 0.11, 0.09, 0.72, this.bodyMat);
+    v.add(this._mesh(new THREE.SphereGeometry(0.17, 12, 10), this.bodyMat, -0.44, 1.54, 0.02));
+    v.add(this._mesh(new THREE.SphereGeometry(0.17, 12, 10), this.bodyMat, 0.44, 1.54, 0.02));
+    this.parts.leftArm = this._limb(v, -0.45, 1.52, 0.11, 0.085, 0.76, this.bodyMat);
+    this.parts.rightArm = this._limb(v, 0.45, 1.52, 0.11, 0.085, 0.76, this.bodyMat);
     // hands
-    this.parts.leftArm.add(this._mesh(new THREE.SphereGeometry(0.1, 10, 8), this.darkMat, 0, -0.74, 0));
-    this.parts.rightArm.add(this._mesh(new THREE.SphereGeometry(0.1, 10, 8), this.darkMat, 0, -0.74, 0));
+    this.parts.leftArm.add(this._mesh(new THREE.SphereGeometry(0.1, 10, 8), this.darkMat, 0, -0.78, 0));
+    this.parts.rightArm.add(this._mesh(new THREE.SphereGeometry(0.1, 10, 8), this.darkMat, 0, -0.78, 0));
 
-    // neck + head (pivot at neck)
-    v.add(this._mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.14, 10), this.darkMat, 0, 1.72, 0));
+    // neck + head (pivot at neck) — a bigger, clearly humanoid head with a jaw
+    v.add(this._mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.2, 12), this.headMat, 0, 1.62, 0));
     const headG = new THREE.Group();
-    headG.position.set(0, 1.8, 0);
-    headG.add(this._mesh(new THREE.SphereGeometry(0.2, 20, 16), this.headMat, 0, 0, 0));
+    headG.position.set(0, 1.82, 0);
+    const skull = this._mesh(new THREE.SphereGeometry(0.25, 20, 16), this.headMat, 0, 0.02, 0);
+    skull.scale.set(0.98, 1.12, 1.02); // a touch taller than wide
+    headG.add(skull);
+    // jaw / chin
+    headG.add(this._mesh(new THREE.BoxGeometry(0.26, 0.16, 0.26), this.headMat, 0, -0.17, 0.02));
+    // ears
+    headG.add(this._mesh(new THREE.SphereGeometry(0.05, 8, 8), this.headMat, -0.25, -0.02, 0));
+    headG.add(this._mesh(new THREE.SphereGeometry(0.05, 8, 8), this.headMat, 0.25, -0.02, 0));
     // helmet shell
-    const helmet = this._mesh(new THREE.SphereGeometry(0.225, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.62), this.darkMat, 0, 0.02, 0);
+    const helmet = this._mesh(new THREE.SphereGeometry(0.285, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.56), this.darkMat, 0, 0.06, 0);
     headG.add(helmet);
     // glowing visor (curved box front)
-    headG.add(this._mesh(new THREE.BoxGeometry(0.3, 0.09, 0.06), this.visorMat, 0, 0.0, 0.18));
+    headG.add(this._mesh(new THREE.BoxGeometry(0.34, 0.1, 0.06), this.visorMat, 0, 0.01, 0.22));
     this.parts.head = headG;
     v.add(headG);
 
@@ -153,8 +162,8 @@ export class Bot {
 
   _buildColliders() {
     return {
-      head: this._collider(new THREE.SphereGeometry(0.26, 10, 8), 1.8, 'head'),
-      body: this._collider(new THREE.BoxGeometry(0.82, 1.0, 0.46), 1.4, 'body'),
+      head: this._collider(new THREE.SphereGeometry(0.3, 10, 8), 1.82, 'head'),
+      body: this._collider(new THREE.BoxGeometry(0.86, 1.0, 0.46), 1.38, 'body'),
       leg: this._collider(new THREE.BoxGeometry(0.6, 0.95, 0.4), 0.55, 'leg'),
     };
   }

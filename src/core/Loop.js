@@ -7,9 +7,10 @@ import * as THREE from 'three';
  * after a tab blur / alt-tab.
  */
 export class Loop {
-  constructor({ step, render }) {
+  constructor({ step, render, frame }) {
     this.step = step; // (dt) => void   — fixed-step simulation
     this.render = render; // (alpha) => void — once per RAF
+    this.frame = frame; // (frameTime) => void — once per RAF, before steps (input/look)
     this.clock = new THREE.Clock(false);
     this.fixedDt = 1 / 120;
     this.maxFrame = 0.1; // clamp: at most 0.1s of catch-up per frame
@@ -47,6 +48,7 @@ export class Loop {
     if (frameTime > this.maxFrame) frameTime = this.maxFrame;
 
     if (this.running) {
+      if (this.frame) this.frame(frameTime); // input + mouse-look at display rate
       this.accumulator += frameTime;
       while (this.accumulator >= this.fixedDt) {
         this.step(this.fixedDt);

@@ -70,15 +70,19 @@ export class CameraRig {
   }
 
   /**
-   * Apply mouse-look and decay recoil. Called at the TOP of the step so the
-   * movement basis and aim ray use the current frame's orientation.
+   * Apply mouse-look from raw pixel deltas. Called ONCE per rendered frame (not
+   * per fixed step) so flicks track the display rate exactly — applied before the
+   * sim steps so the movement basis + aim ray use the fresh orientation.
    */
-  consumeLook(dt) {
+  applyLook(dx, dy) {
     const sens = BASE_SENS * (this.settings.sensitivity ?? 1);
-    this.yaw -= this.input.mouseDX * sens;
-    this.pitch -= this.input.mouseDY * sens;
+    this.yaw -= dx * sens;
+    this.pitch -= dy * sens;
     this.pitch = clamp(this.pitch, -PITCH_LIMIT, PITCH_LIMIT);
+  }
 
+  /** Decay recoil back to centre. Called per fixed step. */
+  decayRecoil(dt) {
     this.recoilPitch = damp(this.recoilPitch, 0, this.recoverLambda, dt);
     this.recoilYaw = damp(this.recoilYaw, 0, this.recoverLambda, dt);
   }

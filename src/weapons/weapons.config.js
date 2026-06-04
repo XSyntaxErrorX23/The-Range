@@ -128,6 +128,22 @@ export const WEAPONS = {
     recoil: R(0.014, 0.013, 0.22), canADS: true, adsFovMult: 0.85, range: 120, swapTime: 1.0,
   },
 
+  // ---------------- heavy ordnance (zombie endless unlock) ----------------
+  lasergun: {
+    id: 'lasergun', name: 'Ion Repeater', category: 'heavy', type: 'hitscan', price: 3500,
+    damage: 34, headshotMult: 2.5, legMult: 0.9, fireRate: 1000, automatic: true,
+    magSize: 60, reserveAmmo: -1, reloadTime: 2.6, spreadDeg: 0.4, adsSpreadDeg: 0.1,
+    recoil: R(0.006, 0.004, 0.34), canADS: true, adsFovMult: 0.85, range: 150, swapTime: 0.8,
+    tracerColor: 0x49ff8a,
+  },
+  bazooka: {
+    id: 'bazooka', name: 'Grave Launcher', category: 'heavy', type: 'hitscan', price: 5500,
+    damage: 70, headshotMult: 1.2, legMult: 1.0, fireRate: 40, automatic: false,
+    magSize: 1, reserveAmmo: -1, reloadTime: 3.0, spreadDeg: 0.6, adsSpreadDeg: 0.3,
+    recoil: R(0.085, 0.012, 0.05), canADS: true, adsFovMult: 0.9, range: 160, swapTime: 1.0,
+    splash: { radius: 5, damage: 130 }, // area blast on impact
+  },
+
   // ---------------- melee / special ----------------
   knife: {
     id: 'knife', name: 'Knife', category: 'melee', type: 'melee', price: 0,
@@ -151,10 +167,11 @@ export const CATEGORIES = [
   { key: 'rifle', label: 'Rifles', ids: ['bulldog', 'guardian', 'phantom', 'vandal'] },
   { key: 'sniper', label: 'Sniper Rifles', ids: ['marshal', 'outlaw', 'operator'] },
   { key: 'mg', label: 'Machine Guns', ids: ['ares', 'odin'] },
+  { key: 'heavy', label: 'Heavy Ordnance', ids: ['lasergun', 'bazooka'] },
 ];
 
 // which categories occupy the Primary slot (key 1) vs the Sidearm slot (key 2)
-export const PRIMARY_CATEGORIES = ['smg', 'shotgun', 'rifle', 'sniper', 'mg'];
+export const PRIMARY_CATEGORIES = ['smg', 'shotgun', 'rifle', 'sniper', 'mg', 'heavy'];
 export const DEFAULT_PRIMARY = 'vandal';
 export const DEFAULT_SIDEARM = 'classic';
 
@@ -163,7 +180,7 @@ export const DEFAULT_SIDEARM = 'classic';
 // handle the chunkiest guns (Operator, Odin).
 const MOVE_BY_CATEGORY = {
   melee: 1.12, special: 1.1, sidearm: 1.05, smg: 1.0,
-  shotgun: 0.96, rifle: 0.95, sniper: 0.92, mg: 0.9,
+  shotgun: 0.96, rifle: 0.95, sniper: 0.92, mg: 0.9, heavy: 0.86,
 };
 const MOVE_OVERRIDE = { operator: 0.82, odin: 0.84, ares: 0.9, outlaw: 0.88, marshal: 0.96 };
 

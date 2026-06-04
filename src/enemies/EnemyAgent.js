@@ -140,6 +140,7 @@ export class EnemyAgent {
     const r = 0.55;
     for (const box of this.world.boxes) {
       if (box.maxY <= 0.5) continue; // floor-level / steppable
+      if (box.minY > 2.0) continue;  // overhead (lintels/roofs) — walk under it
       if (b.x < box.minX - r || b.x > box.maxX + r || b.z < box.minZ - r || b.z > box.maxZ + r) continue;
       const cx = Math.max(box.minX, Math.min(b.x, box.maxX));
       const cz = Math.max(box.minZ, Math.min(b.z, box.maxZ));

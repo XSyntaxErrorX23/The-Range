@@ -241,6 +241,30 @@ export function buildWeaponModel(id) {
       g.add(box(0.02, 0.06, 0.22, 0, 0.12, -0.1, gold));
       break;
 
+    // --------------------------- heavy ordnance -------------------------
+    case 'lasergun':
+      g.add(box(0.085, 0.12, 0.5, 0, 0, -0.1, body));
+      g.add(cyl(0.045, 0.045, 0.4, 0, 0.02, -0.42, dark, 16));      // emitter housing
+      g.add(cyl(0.022, 0.022, 0.56, 0, 0.02, -0.5, glow, 14));      // glowing core barrel
+      g.add(box(0.03, 0.05, 0.34, 0, 0.085, -0.1, glow));           // top energy rail
+      g.add(cyl(0.055, 0.06, 0.07, 0, 0.02, -0.72, glow, 16));      // muzzle ring
+      g.add(box(0.05, 0.18, 0.09, 0, -0.14, 0.02, dark));           // power cell
+      g.add(box(0.03, 0.07, 0.05, 0, -0.05, -0.2, glow));           // side coil
+      pistolGrip(g, { y: -0.09, z: 0.16 });
+      stock(g, { z: 0.22 });
+      break;
+    case 'bazooka':
+      g.add(cyl(0.082, 0.082, 0.92, 0, 0.0, -0.22, body, 22));      // launch tube
+      g.add(cyl(0.1, 0.1, 0.12, 0, 0.0, -0.68, dark, 22));          // muzzle flare
+      g.add(cyl(0.1, 0.1, 0.14, 0, 0.0, 0.24, dark, 22));           // rear blast cone
+      g.add(cyl(0.05, 0.022, 0.16, 0, 0.0, -0.76, steel, 14));      // loaded rocket tip
+      g.add(box(0.05, 0.16, 0.1, 0, -0.13, 0.0, dark));             // grip housing
+      pistolGrip(g, { y: -0.1, z: 0.04 });
+      g.add(box(0.02, 0.07, 0.22, 0, 0.105, -0.18, accent));        // sight rail
+      g.add(box(0.018, 0.05, 0.03, 0, 0.155, -0.36, accent));       // front sight
+      g.add(box(0.07, 0.05, 0.16, 0, -0.06, -0.5, dark));           // fore-grip
+      break;
+
     // --------------------------- melee / special ------------------------
     case 'knife':
       g.add(box(0.02, 0.05, 0.34, 0, 0.06, -0.12, blade));

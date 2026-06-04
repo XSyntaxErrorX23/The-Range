@@ -5,6 +5,28 @@ import {
   metalCanvas, crateCanvas, bumpCanvas, accuracyTargetCanvas, rulerCanvas,
 } from './textures.js';
 
+// Simple dark icon glyphs drawn on a transparent canvas, used on the console buttons.
+function _iconCanvas(draw) {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.strokeStyle = '#04120f'; x.fillStyle = '#04120f'; x.lineWidth = 11; x.lineCap = 'round'; x.lineJoin = 'round';
+  draw(x);
+  return c;
+}
+function droneIconCanvas() {
+  return _iconCanvas((x) => {
+    x.beginPath(); x.moveTo(32, 32); x.lineTo(96, 96); x.moveTo(96, 32); x.lineTo(32, 96); x.stroke(); // arms
+    for (const [px, py] of [[32, 32], [96, 32], [32, 96], [96, 96]]) { x.beginPath(); x.arc(px, py, 15, 0, 7); x.stroke(); } // rotors
+    x.beginPath(); x.arc(64, 64, 17, 0, 7); x.fill(); // body
+  });
+}
+function botIconCanvas() {
+  return _iconCanvas((x) => {
+    x.beginPath(); x.arc(64, 40, 18, 0, 7); x.fill(); // head
+    x.beginPath(); x.ellipse(64, 88, 24, 30, 0, 0, 7); x.fill(); // body
+  });
+}
+
 /**
  * Builds "The Range" from primitives: tan floor with orange lane markings,
  * plaster walls, wooden roof trusses, a spawn console, a target platform,
@@ -278,6 +300,12 @@ export class Range {
     const top = this._box(7.2, 0.08, 1.7, 0, 1.12, -3, this.mat.accent);
     this._add(top, { solid: true });
 
+    // two shootable console buttons (icons + colour show what they do):
+    //   cyan = on, red = off.  drones (left), practice dummies (right).
+    this._btnOn = 0x46e0d6; this._btnOff = 0xff4655;
+    this._droneBtnMat = this._consoleButton(-0.75, 'droneToggle', droneIconCanvas());
+    this._botBtnMat = this._consoleButton(0.75, 'botToggle', botIconCanvas());
+
     // side counters
     for (const x of [-16, 16]) {
       const counter = this._box(6, 1.0, 1.2, x, 0.5, -5, this.mat.metal);
@@ -342,8 +370,6 @@ export class Range {
   _buildArena() {
     const CZ = 17; // centre line
     const crate = this.mat.crate, metal = this.mat.metal, wall = this.mat.wall;
-    const foliage = new THREE.MeshStandardMaterial({ color: 0x3f7d3a, roughness: 0.85, metalness: 0 });
-    const planter = new THREE.MeshStandardMaterial({ color: 0x5a4634, roughness: 0.75, metalness: 0.1 });
 
     const cover = (x, z, w, h, d, mat) => {
       const m = this._box(w, h, d, x, h / 2, z, mat);
@@ -357,35 +383,48 @@ export class Range {
       for (const sx of xs) for (const sz of zs) cover(sx, sz, w, h, d, mat);
     };
 
-    // NOTE: keep the centre line clear of tall blockers — both fighters spawn
-    // near x=0, so a tall centre pillar would eat every straight-on shot.
-    sym(0, CZ, 2.4, 0.85, 1.8, metal);      // LOW centre block: shoot over it, crouch behind
-    sym(7.5, 12, 1.5, 1.5, 1.5, crate);     // quadrant crates (off the centre lane)
-    sym(13, 11, 1.0, 2.0, 4.6, wall);       // tall side walls pushed to the edges
-    sym(4.5, 7.5, 1.9, 0.95, 1.9, crate);   // low near-spawn cover
-    sym(11, 23, 1.4, 1.5, 1.4, crate);      // mid-field crates
+    // thin axis-aligned wall segments (Killhouse-style) — kept axis-aligned so the
+    // AABB collision matches the visual. H = wall along X, V = wall along Z.
+    const t = 0.55, TH = 3.4, MH = 2.3, LH = 1.15;
+    const H = (x, z, len, h = MH, mat = wall) => sym(x, z, len, h, t, mat);
+    const V = (x, z, len, h = MH, mat = wall) => sym(x, z, t, h, len, mat);
+    const crateBox = (x, z, s = 1.5, h = 1.5) => sym(x, z, s, h, s, crate);
 
-    // barrels flanking the centre
     const barrel = (x, z) => {
       const b = this._cyl(0.34, 0.36, 1.1, x, 0.55, z, metal, 18);
       b.castShadow = true; b.receiveShadow = true;
       this._add(b, { collide: true, solid: true, occlude: true });
       this._add(this._cyl(0.37, 0.37, 0.06, x, 0.85, z, this.mat.accent, 18), { solid: true });
     };
+
+    // --- inner perimeter: a contained killhouse room within the warehouse shell ---
+    const RX = 16, RZ0 = 1.5, RZ1 = 33, PH = 5;
+    for (const sx of [RX, -RX]) {
+      const seg = this._box(0.5, PH, RZ1 - RZ0, sx, PH / 2, (RZ0 + RZ1) / 2, wall);
+      seg.castShadow = true; seg.receiveShadow = true;
+      this._add(seg, { collide: true, solid: true, occlude: true });
+    }
+    for (const sz of [RZ0, RZ1]) this._add(this._box(2 * RX + 0.5, PH, 0.5, 0, PH / 2, sz, wall), { collide: true, solid: true, occlude: true });
+
+    // --- dense maze of cover (4-fold symmetric; pieces defined for x>=0, z<=CZ) ---
+    // spawn pockets
+    H(0, 7, 6.5, MH);          // wall a couple metres in front of each spawn
+    V(3.25, 9, 4, MH);         // L-returns forming a spawn pocket
+    V(10, 5, 5, TH);           // tall wall guarding the spawn corner
+    // first ring
+    H(8.5, 11, 5.5, MH);
+    V(5, 13.5, 4.5, MH);
+    crateBox(13.5, 12, 1.7, 1.7);
+    H(13, 7.5, 3.5, TH);
+    // central approaches
+    V(0, 11.5, 5, MH);         // central spine (two segments via z-mirror)
+    H(6, 15.5, 5, LH, crate);  // low crate wall to peek/vault
+    V(11.5, 15.5, 4.5, MH);
+    crateBox(3, 14.5, 1.3, 1.0);
+    // centre
+    H(0, CZ, 5, LH, metal);    // low central block: shoot over, crouch behind
     barrel(9, CZ); barrel(-9, CZ);
-
-    // decorative planters with foliage (collidable base)
-    const plant = (x, z) => {
-      const base = this._box(0.95, 0.6, 0.95, x, 0.3, z, planter);
-      base.castShadow = true; this._add(base, { collide: true, solid: true });
-      const bush = new THREE.Mesh(new THREE.SphereGeometry(0.72, 12, 10), foliage);
-      bush.position.set(x, 1.12, z); bush.castShadow = true;
-      this._add(bush, { solid: true });
-    };
-    for (const [x, z] of [[14, 8], [14, 26]]) { plant(x, z); plant(-x, z); }
-
-    // centre accent ring on the floor
-    this._add(this._cyl(3.4, 3.4, 0.04, 0, 0.02, CZ, this.mat.accent, 40), { solid: true });
+    this._add(this._cyl(3.0, 3.0, 0.04, 0, 0.02, CZ, this.mat.accent, 40), { solid: true });
   }
 
   /** A scored accuracy bullseye on a stand, plus a distance ruler — like the
@@ -449,6 +488,34 @@ export class Range {
     }
 
     this.setTargetDistance(20); // default 20m + highlights the active button
+  }
+
+  /** Build one shootable console button (post + button + plinth + icon decal). */
+  _consoleButton(x, flag, iconCanvas) {
+    const z = -2.86;
+    const mat = new THREE.MeshStandardMaterial({ color: 0x0a1a1c, emissive: this._btnOn, emissiveIntensity: 1.1, roughness: 0.4, metalness: 0.3 });
+    this._add(this._box(0.12, 0.5, 0.12, x, 1.42, z - 0.04, this.mat.metal), { solid: true });        // post
+    const btn = this._box(0.66, 0.46, 0.16, x, 1.78, z, mat);
+    btn.userData[flag] = true;
+    this._add(btn, { solid: true });
+    this._add(this._box(0.84, 0.06, 0.2, x, 1.5, z - 0.02, this.mat.metal), { solid: true });          // plinth
+    // icon glyph on the player-facing (-Z) face (not a solid — shots pass to the button)
+    const icon = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.4, 0.4),
+      new THREE.MeshBasicMaterial({ map: canvasTexture(iconCanvas, 1, 1), transparent: true, side: THREE.DoubleSide }),
+    );
+    icon.position.set(x, 1.78, z - 0.09);
+    icon.rotation.y = Math.PI;
+    this.practiceGroup.add(icon);
+    return mat;
+  }
+
+  /** Colour the console buttons by state (cyan = on, red = off). */
+  setDroneButton(on) {
+    if (this._droneBtnMat) this._droneBtnMat.emissive.setHex(on ? this._btnOn : this._btnOff);
+  }
+  setBotButton(on) {
+    if (this._botBtnMat) this._botBtnMat.emissive.setHex(on ? this._btnOn : this._btnOff);
   }
 
   /** Slide the accuracy target to a distance (metres from the firing line) and

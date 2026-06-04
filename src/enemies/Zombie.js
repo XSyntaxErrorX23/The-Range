@@ -19,7 +19,7 @@ export class Zombie {
     this._recolor();
     // the zombie pose pushes the visual head forward — move the head HITBOX to match
     // so headshots line up with where the head actually is.
-    this.bot.colliders.head.position.set(0, 1.8, 0.16);
+    this.bot.colliders.head.position.set(0, 1.82, 0.16);
     this.bot.hide();
 
     this.moveSpeed = 2.5;
@@ -31,6 +31,10 @@ export class Zombie {
     this.isBoss = false;
     this._bossBuilt = false;
     this._isBossModel = false;
+    this.variant = 'normal'; // normal | brute | flyer | boss
+    this.flyHeight = 0;
+    this._t = 0;
+    this._wings = null;
   }
 
   get alive() { return this.bot.alive; }
@@ -44,19 +48,52 @@ export class Zombie {
     b.visorMat.color.set(0x1a0c0c); b.visorMat.emissive.set(0xff2a14); b.visorMat.emissiveIntensity = 0.9;
   }
 
-  spawn(pos, { health = 100, speed = 2.5, dmg = 10, boss = false } = {}) {
+  spawn(pos, { health = 100, speed = 2.5, dmg = 10, boss = false, type = 'normal' } = {}) {
     this.isBoss = boss;
+    this.variant = boss ? 'boss' : type;
     this.moveSpeed = speed;
     this.meleeDmg = dmg;
+    this.flyHeight = 0;
     this.bot.pose = boss ? 'default' : 'zombie';
     if (boss && !this._bossBuilt) this._buildBoss();
-    const scale = boss ? 2.8 : 1;
-    this.bot.root.scale.setScalar(scale);
+    this._applyVariant(this.variant);
     this.bot.spawnAt(pos.clone(), { armor: 0 });
     this.bot.maxHealth = health; // override the Bot default after spawnAt
     this.bot.health = health;
     this.attackCd = 0.6;
     this.strafeTimer = 0;
+  }
+
+  /** Size, colour and decorations for a zombie variant (boss keeps its own build). */
+  _applyVariant(v) {
+    let scale = 1;
+    if (v === 'boss') { scale = 2.8; }
+    else if (v === 'brute') { scale = 1.8; this._tint(0x6a2a22, 0x9a5040, 0x3a1410); }   // hulking dark-red
+    else if (v === 'flyer') { scale = 0.92; this.flyHeight = 2.5; this._tint(0x365463, 0x9fc0cf, 0x142028); this._buildWings(); } // pale floating
+    else { this._tint(0x4f6a3c, 0x93a06f, 0x2a2e22); }                                     // normal green
+    this.bot.root.scale.setScalar(scale);
+    if (this._wings) this._wings.visible = (v === 'flyer');
+  }
+
+  _tint(bodyColor, headColor, darkColor) {
+    const b = this.bot;
+    b.bodyMat.color.set(bodyColor);
+    b.headMat.color.set(headColor);
+    b.darkMat.color.set(darkColor);
+  }
+
+  _buildWings() {
+    if (this._wings) return;
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x223038, roughness: 0.9, metalness: 0, transparent: true, opacity: 0.82, side: THREE.DoubleSide });
+    for (const sx of [-1, 1]) {
+      const wing = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.62), mat);
+      wing.position.set(sx * 0.5, 1.5, -0.12);
+      wing.rotation.set(0, sx * 0.5, sx * 0.3);
+      g.add(wing);
+    }
+    this._wings = g;
+    this.bot.visual.add(g);
   }
 
   /** Turn this zombie into the Gravekeeper: hooded robe, a SKULL head, a scythe. */
@@ -114,7 +151,13 @@ export class Zombie {
   hide() { this.bot.hide(); }
 
   update(dt) {
+    this._t += dt;
     this.bot.update(dt); // animation + rise/death
+    if (this._wings && this._wings.visible) { // flap
+      const f = Math.sin(this._t * 16) * 0.5;
+      this._wings.children[0].rotation.z = 0.3 + f;
+      this._wings.children[1].rotation.z = -0.3 - f;
+    }
     if (!this.bot.alive || this.bot.state !== 'alive') return;
     if (this.attackCd > 0) this.attackCd -= dt;
 
@@ -126,9 +169,9 @@ export class Zombie {
     this._navigate(dt, dist);
 
     // bite on contact
-    const reach = this.meleeRange * (this.isBoss ? 2.8 : 1);
+    const reach = this.meleeRange * this.bot.root.scale.x;
     if (dist <= reach && this.attackCd <= 0 && this.player.alive) {
-      this.attackCd = this.isBoss ? 1.5 : 1.0;
+      this.attackCd = this.isBoss ? 1.5 : (this.variant === 'flyer' ? 0.8 : 1.0);
       this.bot.flinch = 0.14; // little lunge
       this.onDamagePlayer(this.meleeDmg);
       bus.emit(EV.ZOMBIE_ATTACK, { boss: this.isBoss });
@@ -149,7 +192,7 @@ export class Zombie {
     mvx += -nz * this.strafeDir * 0.22;
     mvz += nx * this.strafeDir * 0.22;
 
-    const stop = this.meleeRange * 0.9 * (this.isBoss ? 2.8 : 1);
+    const stop = this.meleeRange * 0.9 * this.bot.root.scale.x;
     if (dist < stop) { mvx = 0; mvz = 0; }
 
     const ml = Math.hypot(mvx, mvz);
@@ -158,14 +201,20 @@ export class Zombie {
     b.z += mvz * this.moveSpeed * dt;
     this._avoid(b);
 
+    // settle to ground, or rise + hover for flyers
+    let ty = this.flyHeight;
+    if (this.variant === 'flyer') ty += Math.sin(this._t * 3) * 0.18;
+    b.y += (ty - b.y) * Math.min(1, dt * 3);
+
     this.bot.strafeMax = this.moveSpeed;
     this.bot.strafeVel = ml > 0.01 ? this.moveSpeed * this.strafeDir : 0;
   }
 
   _avoid(b) {
-    const r = this.isBoss ? 1.4 : 0.5;
+    const r = 0.5 * this.bot.root.scale.x;
     for (const box of this.world.boxes) {
       if (box.maxY <= 0.5) continue;
+      if (box.minY > 2.0) continue; // overhead — walk under it
       if (b.x < box.minX - r || b.x > box.maxX + r || b.z < box.minZ - r || b.z > box.maxZ + r) continue;
       const cx = Math.max(box.minX, Math.min(b.x, box.maxX));
       const cz = Math.max(box.minZ, Math.min(b.z, box.maxZ));
@@ -180,6 +229,6 @@ export class Zombie {
     const bd = this.world.bounds;
     b.x = Math.max(bd.minX + 1.2, Math.min(bd.maxX - 1.2, b.x));
     b.z = Math.max(bd.minZ + 1.2, Math.min(bd.maxZ - 1.2, b.z));
-    b.y = 0;
+    // y handled by the caller (ground settle / flyer hover)
   }
 }

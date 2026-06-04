@@ -48,8 +48,11 @@ export const EV = {
   COMBAT_KILL: 'combat:kill', // { bot }
   COMBAT_MISS: 'combat:miss', // { point, normal }
   COMBAT_SLASH: 'combat:slash', // melee hit a surface — { point, normal }
+  COMBAT_SPLASH: 'combat:splash', // explosive area damage (bazooka) — { point, radius, damage, mult }
   ACCURACY_SCORE: 'accuracy:score', // shot the range accuracy target — { score, point }
   RANGE_DISTANCE: 'range:distance', // shot a distance button — { distance }
+  RANGE_DRONES_TOGGLE: 'range:dronestoggle', // shot the console button to remove/restore the bullseye drones
+  RANGE_BOTS_TOGGLE: 'range:botstoggle', // shot the console button to remove/restore the practice dummies
   ZOMBIE_STATE: 'zombie:state', // { active, wave, totalWaves, zombiesLeft, lives, credits, boss, bossHealth, bossMax }
   ZOMBIE_ANNOUNCE: 'zombie:announce', // { text, sub }
   ZOMBIE_END: 'zombie:end', // { win, wave }
@@ -65,6 +68,11 @@ export const EV = {
   AIM_STATE: 'aim:state', // gridshot trainer — { active, time, score, shots, hits, acc, streak }
   AIM_ANNOUNCE: 'aim:announce', // { text, sub }
   AIM_END: 'aim:end', // { score, acc, best, kps }
+  TDM_STATE: 'tdm:state', // 5v5 team deathmatch — { active, ally, enemy, target }
+  TDM_ANNOUNCE: 'tdm:announce', // { text, sub }
+  TDM_END: 'tdm:end', // { win, ally, enemy }
+  TDM_REPORT: 'tdm:report', // death combat report — { show, killer, killerWeapon, dmgOut, dmgIn, kills }
+  TDM_KILL: 'tdm:kill', // killfeed entry — { killer, killerTeam, victim, victimTeam, weaponId, head }
   CAMERA_MODE: 'camera:modechanged', // 'first' | 'third'
   SCORE_UPDATE: 'score:update', // ScoreManager state
   RANGE_SETTINGS: 'range:settings', // Settings snapshot

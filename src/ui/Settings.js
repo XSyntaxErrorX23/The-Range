@@ -20,6 +20,7 @@ const DEFAULTS = {
   botMode: 'static', // static | strafe | popup | skirmish | zombie
   aiDifficulty: 'hard', // skirmish opponent: easy | medium | hard
   scopeMode: 'hold', // scoped weapons (snipers): hold | toggle
+  adsMode: 'hold', // non-scoped ADS guns (rifles/SMG/shotgun/MG): hold | toggle
   ign: 'Agent', // in-game name (shown in killfeed)
   seenWelcome: false, // onboarding shown once
 };

@@ -14,6 +14,9 @@ const WEAPON_ICONS = {
   smg: '<svg viewBox="0 0 64 32"><path d="M2 10h48v6H40l-1 10h-7l-1-10H22v6h-8v-6H2z"/></svg>',
   rifle: '<svg viewBox="0 0 64 32"><path d="M2 12h58v5H44l-1 9h-6l-1-9H20v5h-6v-5H2z"/></svg>',
   sniper: '<svg viewBox="0 0 64 32"><path d="M2 13h60v4H46l-1 9h-5l-1-9H18v4h-5v-4H2z M24 7h14v3H24z"/></svg>',
+  shotgun: '<svg viewBox="0 0 64 32"><path d="M2 12h54v6H22v8h-7v-8H2z M40 13h18v3H40z"/></svg>',
+  mg: '<svg viewBox="0 0 64 32"><path d="M2 11h58v8H24v7h-9v-7H2z M6 19h12v6H6z"/></svg>',
+  heavy: '<svg viewBox="0 0 64 32"><path d="M2 12h52v8H2z M54 13h8v6h-8z M14 20h10v6H14z"/></svg>',
   knife: '<svg viewBox="0 0 64 32"><path d="M8 20l34-12 6 3-30 16-6-2z M14 25l6 3"/></svg>',
 };
 
@@ -174,6 +177,15 @@ export class HUD {
       '<span class="zb-credits" id="zb-credits">¤ 0</span>';
     this.root.appendChild(this.zombiebar);
 
+    // team deathmatch scoreboard
+    this.tdmbar = this._el('div'); this.tdmbar.id = 'tdmbar';
+    this.tdmbar.innerHTML =
+      '<span class="td-side ally">ALLIES</span><span class="td-score ally" id="td-a">0</span>' +
+      '<span class="du-dash">—</span>' +
+      '<span class="td-score enemy" id="td-e">0</span><span class="td-side enemy">ENEMIES</span>' +
+      '<span class="td-target" id="td-target"></span>';
+    this.root.appendChild(this.tdmbar);
+
     // aim trainer (gridshot) status bar
     this.aimbar = this._el('div'); this.aimbar.id = 'aimbar';
     this.aimbar.innerHTML =
@@ -182,6 +194,26 @@ export class HUD {
       '<span class="ab-stat">ACC <b id="ab-acc">100%</b></span>' +
       '<span class="ab-stat">STREAK <b id="ab-streak">0</b></span>';
     this.root.appendChild(this.aimbar);
+
+    // death combat report (TDM) — skeleton figure shows hit zones
+    const body = (p) =>
+      `<svg viewBox="0 0 24 40" class="cr-body">` +
+      `<circle class="z-head" cx="12" cy="5" r="4"/>` +
+      `<rect class="z-body" x="6.5" y="10" width="11" height="14" rx="2.5"/>` +
+      `<rect class="z-legs" x="7.6" y="24" width="3.4" height="13" rx="1.4"/>` +
+      `<rect class="z-legs" x="13" y="24" width="3.4" height="13" rx="1.4"/>` +
+      `</svg>` +
+      `<div class="cr-zones"><span>HEAD <b class="z-head-n">0</b></span><span>BODY <b class="z-body-n">0</b></span><span>LEGS <b class="z-legs-n">0</b></span></div>`;
+    this.combatreport = this._el('div'); this.combatreport.id = 'combatreport';
+    this.combatreport.innerHTML =
+      '<div class="cr-killed">ELIMINATED BY <span id="cr-killer">ENEMY</span><span id="cr-weap" class="cr-weap"></span></div>' +
+      '<div class="cr-title">COMBAT REPORT</div>' +
+      '<div class="cr-cols">' +
+        `<div class="cr-col out" id="cr-out-col"><div class="cr-h">OUTGOING</div>${body('o')}<div class="cr-big" id="cr-out">0</div><div class="cr-sub">total dmg</div></div>` +
+        '<div class="cr-col mid"><div class="cr-h">KILLS</div><div class="cr-big cyan" id="cr-kills">0</div></div>' +
+        `<div class="cr-col in" id="cr-in-col"><div class="cr-h">INCOMING</div>${body('i')}<div class="cr-big red" id="cr-in">0</div><div class="cr-sub">total dmg</div></div>` +
+      '</div>';
+    this.root.appendChild(this.combatreport);
 
     // damage feedback + round announcements
     this.hurt = this._el('div'); this.hurt.id = 'hurt';
@@ -225,8 +257,41 @@ export class HUD {
     this.aimbar.classList.remove('show');
     this.zombiebar.classList.remove('show');
     this.duelbar.classList.remove('show');
+    this.tdmbar.classList.remove('show');
     this.enemyhp.classList.remove('show');
+    if (this.combatreport) this.combatreport.classList.remove('show');
     this.rangepanel.style.display = '';
+  }
+
+  setCombatReport(r) {
+    this.combatreport.classList.toggle('show', !!r.show);
+    if (!r.show) return;
+    document.getElementById('cr-killer').textContent = (r.killer || 'ENEMY').toUpperCase();
+    document.getElementById('cr-weap').textContent = r.killerWeapon ? ' · ' + r.killerWeapon : '';
+    document.getElementById('cr-out').textContent = String(r.dmgOut || 0);
+    document.getElementById('cr-kills').textContent = String(r.kills || 0);
+    document.getElementById('cr-in').textContent = String(r.dmgIn || 0);
+    this._fillBody(document.getElementById('cr-out-col'), r.out || {});
+    this._fillBody(document.getElementById('cr-in-col'), r.in || {});
+  }
+
+  /** Colour the skeleton zones that took damage + fill their numbers. */
+  _fillBody(col, z) {
+    if (!col) return;
+    for (const [key, val] of [['head', z.head || 0], ['body', z.body || 0], ['legs', z.leg || 0]]) {
+      for (const el of col.querySelectorAll('.z-' + key)) el.classList.toggle('hit', val > 0);
+      const n = col.querySelector('.z-' + key + '-n');
+      if (n) n.textContent = String(val);
+    }
+  }
+
+  setTDM(s) {
+    this.tdmbar.classList.toggle('show', !!s.active);
+    this.rangepanel.style.display = s.active ? 'none' : '';
+    if (!s.active) return;
+    document.getElementById('td-a').textContent = String(s.ally);
+    document.getElementById('td-e').textContent = String(s.enemy);
+    document.getElementById('td-target').textContent = 'FIRST TO ' + s.target;
   }
 
   setAim(s) {
@@ -331,6 +396,7 @@ export class HUD {
   }
 
   setRangePanel(snap) {
+    this._botMode = snap.botMode;
     if (this.aimbar && snap.botMode !== 'aim') this.aimbar.classList.remove('show'); // never linger outside aim mode
     document.getElementById('rp-mode').textContent = snap.botMode.toUpperCase();
     document.getElementById('rp-armor').textContent = snap.botArmor ? 'ENABLED' : 'DISABLED';
@@ -349,10 +415,21 @@ export class HUD {
     if (kind === 'kill') el.classList.add('kill');
   }
 
-  killfeedAdd(name, head) {
+  killfeedAdd(name, head, weaponId, victim = 'BOT') {
+    this.killfeedEntry({ killer: name, killerTeam: 'ally', victim, victimTeam: 'enemy', weaponId, head });
+  }
+
+  killfeedEntry({ killer, killerTeam, victim, victimTeam, weaponId, head }) {
+    const esc = (s) => (s || '?').replace(/[<>&]/g, '');
+    const cls = (t) => (t === 'enemy' ? 'kf-enemy' : 'kf-ally');
+    const icon = WEAPON_ICONS[modelKeyFor(weaponId)] || WEAPON_ICONS.rifle;
     const row = this._el('div', 'killrow');
-    const ign = (name || 'Agent').replace(/[<>&]/g, '');
-    row.innerHTML = `<span class="kf-name">${ign}</span> <span class="kf-arrow ${head ? 'kf-head' : ''}">${head ? '◈' : '▸'}</span> BOT`;
+    row.classList.add(killerTeam === 'enemy' ? 'kf-row-enemy' : 'kf-row-ally');
+    row.innerHTML =
+      `<span class="kf-name ${cls(killerTeam)}">${esc(killer)}</span>` +
+      `<span class="kf-gun ${head ? 'kf-head' : ''}">${icon}</span>` +
+      (head ? '<span class="kf-hs">◈</span>' : '') +
+      `<span class="kf-victim ${cls(victimTeam)}">${esc(victim)}</span>`;
     this.killfeed.appendChild(row);
     setTimeout(() => row.classList.add('fade'), 2300);
     setTimeout(() => row.remove(), 2900);
@@ -414,7 +491,8 @@ export class HUD {
       this._lastHitHead = zone === 'head';
       this.hitmarkerShow(dead ? 'kill' : zone === 'head' ? 'head' : 'body');
     });
-    bus.on(EV.COMBAT_KILL, () => this.killfeedAdd(this.settings.ign, this._lastHitHead));
+    bus.on(EV.COMBAT_KILL, ({ weaponId }) => { if (this._botMode !== 'tdm') this.killfeedAdd(this.settings.ign, this._lastHitHead, weaponId); });
+    bus.on(EV.TDM_KILL, (e) => this.killfeedEntry(e));
     bus.on(EV.SCORE_UPDATE, (s) => this.setScore(s));
     bus.on(EV.CAMERA_MODE, (mode) => this.setViewMode(mode));
     bus.on(EV.RANGE_SETTINGS, (snap) => this.setRangePanel(snap));
@@ -425,6 +503,9 @@ export class HUD {
     bus.on(EV.ZOMBIE_ANNOUNCE, (a) => this.announceShow(a.text, a.sub));
     bus.on(EV.AIM_STATE, (s) => this.setAim(s));
     bus.on(EV.AIM_ANNOUNCE, (a) => this.announceShow(a.text, a.sub));
+    bus.on(EV.TDM_STATE, (s) => this.setTDM(s));
+    bus.on(EV.TDM_ANNOUNCE, (a) => this.announceShow(a.text, a.sub));
+    bus.on(EV.TDM_REPORT, (r) => this.setCombatReport(r));
     bus.on(EV.PICKUP, ({ type }) => this.showPickup(type));
   }
 }

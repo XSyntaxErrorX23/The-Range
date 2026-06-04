@@ -185,12 +185,17 @@ export class WeaponManager {
 
     const w = this.weapon;
     let wantADS;
-    if (w.canADS && w.scoped && this.settings.scopeMode === 'toggle') {
-      // toggle: right-click flips the scope on/off
-      if (this.input.altPressed()) this._scopeToggle = !this._scopeToggle;
-      wantADS = this._scopeToggle && !this.isBusy();
+    if (!w.canADS) {
+      wantADS = false;
     } else {
-      wantADS = this.input.adsDown() && w.canADS && !this.isBusy();
+      // scoped snipers use scopeMode; every other ADS gun uses adsMode
+      const mode = w.scoped ? this.settings.scopeMode : this.settings.adsMode;
+      if (mode === 'toggle') {
+        if (this.input.altPressed()) this._scopeToggle = !this._scopeToggle; // right-click flips
+        wantADS = this._scopeToggle && !this.isBusy();
+      } else {
+        wantADS = this.input.adsDown() && !this.isBusy();
+      }
     }
     if (wantADS !== this.isADS) {
       this.isADS = wantADS;

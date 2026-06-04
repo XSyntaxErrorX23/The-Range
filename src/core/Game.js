@@ -13,6 +13,7 @@ import { resolveCollision } from '../player/collision.js';
 import { Range } from '../world/Range.js';
 import { Graveyard } from '../world/Graveyard.js';
 import { AimArena } from '../world/AimArena.js';
+import { Nuketown } from '../world/Nuketown.js';
 import { RangeDrone, DroneField } from '../world/RangeDrone.js';
 import { setupLights } from '../world/lights.js';
 import { ViewModel } from '../weapons/ViewModel.js';
@@ -22,6 +23,7 @@ import { BotManager } from '../enemies/BotManager.js';
 import { Skirmish } from '../modes/Skirmish.js';
 import { ZombieSurvival } from '../modes/ZombieSurvival.js';
 import { AimTrainer } from '../modes/AimTrainer.js';
+import { TeamDeathmatch } from '../modes/TeamDeathmatch.js';
 import { AudioManager } from '../fx/AudioManager.js';
 import { FXManager } from '../fx/FXManager.js';
 import { Settings } from '../ui/Settings.js';
@@ -94,6 +96,32 @@ export class Game {
     // flying bullseye drone (practice range moving target) + a field of pop-up drones
     this.rangeDrone = new RangeDrone(this.engine.scene);
     this.droneField = new DroneField(this.engine.scene, 6);
+    // console toggle state (shoot the buttons on the central desk)
+    this._dronesOn = true;
+    this._botsOn = true;
+    bus.on(EV.RANGE_DRONES_TOGGLE, () => {
+      if (['zombie', 'skirmish', 'aim'].includes(this.settings.botMode)) return;
+      this._dronesOn = !this._dronesOn;
+      this._applyDrones(true);
+      if (this.audio) this.audio.ui();
+    });
+    bus.on(EV.RANGE_BOTS_TOGGLE, () => {
+      if (['zombie', 'skirmish', 'aim'].includes(this.settings.botMode)) return;
+      this._botsOn = !this._botsOn;
+      this.bots.setSuppressed(!this._botsOn);
+      this.range.setBotButton(this._botsOn);
+      if (this.audio) this.audio.ui();
+    });
+
+    // 5v5 team deathmatch coordinator (dormant until bot mode === 'tdm')
+    this.tdm = new TeamDeathmatch({
+      scene: this.engine.scene,
+      player: this.player,
+      cameraRig: this.cameraRig,
+      bots: this.bots,
+      settings: this.settings,
+      weapons: this.weapons,
+    });
 
     // Aim trainer (gridshot) coordinator (dormant until bot mode === 'aim')
     this.aim = new AimTrainer({
@@ -161,6 +189,13 @@ export class Game {
       { pos: V(-11, 6, 18), look: V(2, 1, -4) },       // over the graves
       { pos: V(22, 5, -4), look: V(-12, 1.5, 8) },     // sweep across
     ];
+    this._cineWaypointsNuke = [
+      { pos: V(0, 9, -26), look: V(0, 1.5, 6) },     // over the ally house, downrange
+      { pos: V(-13, 4, 0), look: V(6, 1.5, 4) },     // sweep the west lane
+      { pos: V(12, 5, 8), look: V(-4, 1.2, -6) },    // across the yard
+      { pos: V(0, 11, 24), look: V(0, 1, -6) },      // high over the enemy house
+      { pos: V(6, 2.5, -4), look: V(-8, 1.5, 6) },   // low through the cars
+    ];
     this._cineWaypointsAim = [
       { pos: V(0, 2.6, -2.5), look: V(0, 2.0, 14) },   // behind the firing line, downrange
       { pos: V(-6.5, 3.4, 3), look: V(4, 1.8, 15) },   // sweep from the left
@@ -173,9 +208,18 @@ export class Game {
     this._cinePos = new THREE.Vector3();
     this._cineLook = new THREE.Vector3();
 
+    this._lookDX = 0; this._lookDY = 0;
     this.loop = new Loop({
       step: (dt) => this._step(dt),
-      render: (alpha, dt) => { if (this._cineActive) this._cineUpdate(dt); this.engine.render(); },
+      frame: (ft) => this._frameLook(ft), // apply mouse-look once per rendered frame
+      render: (alpha, dt) => this._render(alpha, dt),
+    });
+
+    // Guard against accidental tab-close while playing: crouch is Ctrl, so Ctrl+W
+    // (crouch while holding forward) is the browser's close-tab combo — which JS
+    // cannot preventDefault. A beforeunload confirm catches it during gameplay only.
+    window.addEventListener('beforeunload', (e) => {
+      if (this.loop.running) { e.preventDefault(); e.returnValue = ''; }
     });
   }
 
@@ -183,7 +227,8 @@ export class Game {
   _cineUpdate(dt) {
     const wps = (this.world === this.graveyard && this.graveyard) ? this._cineWaypointsGrave
       : (this.world === this.aimArena && this.aimArena) ? this._cineWaypointsAim
-        : this._cineWaypoints;
+        : (this.world === this.nuketown && this.nuketown) ? this._cineWaypointsNuke
+          : this._cineWaypoints;
     const SEG = 5.5; // seconds per leg
     this._cineT += dt;
     const total = this._cineT / SEG;
@@ -224,8 +269,9 @@ export class Game {
     this.overlay.getStats = () => this.score.getStats();
     this.overlay.onResetLifetime = () => this.score.resetLifetime();
     this.overlay.onRematch = () => {
-      if (this.settings.botMode === 'zombie') this.zombie.activate(this.graveyard);
+      if (this.settings.botMode === 'zombie') { this.overlay.heavyUnlocked = false; this.zombie.activate(this.graveyard); }
       else if (this.settings.botMode === 'aim') this.aim.restart();
+      else if (this.settings.botMode === 'tdm') this.tdm.rematch();
       else this.skirmish.rematch();
       this.input.requestLock();
     };
@@ -236,7 +282,6 @@ export class Game {
     this.overlay.onMainMenu = () => {
       this._hasPlayed = false;
       this._cineActive = true;
-      this._cineGunHidden = false;
       this.hud.hide();
       this.viewModel.setVisible(false);
       this._setMode(this.settings.botMode); // re-arm the current mode fresh
@@ -253,6 +298,10 @@ export class Game {
       this.overlay.showResult({ win, title: win ? 'VICTORY' : 'DEFEAT', detail, canContinue: win && !this.zombie.endless });
       this.input.exitLock();
     };
+    this.tdm.onMatchEnd = (win) => {
+      this.overlay.showResult({ win, title: win ? 'VICTORY' : 'DEFEAT', detail: `Allies ${this.tdm.scores.ally} — ${this.tdm.scores.enemy} Enemies` });
+      this.input.exitLock();
+    };
     this.aim.onMatchEnd = ({ score, acc, best, kps }) => {
       this.overlay.showResult({
         win: acc >= 80, title: 'TIME!',
@@ -260,42 +309,65 @@ export class Game {
       });
       this.input.exitLock();
     };
-    this.overlay.onContinue = () => { this.zombie.startEndless(); this.input.requestLock(); };
+    this.overlay.onContinue = () => { this.overlay.heavyUnlocked = true; this.zombie.startEndless(); this.input.requestLock(); };
   }
 
   /** Switch mode: swap the active world + coordinator (range layouts / graveyard). */
   _setMode(mode) {
     this.bots.setMode(mode);
     this.hud.hideModeBars(); // clear any lingering bar; the active mode re-shows its own
-    const practice = !['zombie', 'skirmish', 'aim'].includes(mode);
+    this.overlay.heavyUnlocked = false; // re-locked until endless is reached again
+    const practice = !['zombie', 'skirmish', 'aim', 'tdm'].includes(mode);
     if (mode === 'zombie') {
       this._ensureGraveyard();
       this._useWorld(this.graveyard);
       this.skirmish.deactivate();
+      this.tdm.deactivate();
       this.zombie.activate(this.graveyard);
     } else if (mode === 'skirmish') {
       this._useWorld(this.range);
       this.range.setLayout('arena');
       this.zombie.deactivate();
       this.aim.deactivate();
+      this.tdm.deactivate();
       this.skirmish.activate();
     } else if (mode === 'aim') {
       this._ensureAimArena();
       this._useWorld(this.aimArena);
       this.zombie.deactivate();
       this.skirmish.deactivate();
+      this.tdm.deactivate();
       this.aim.setArena(this.aimArena);
       this.aim.activate();
+    } else if (mode === 'tdm') {
+      this._ensureNuketown();
+      this._useWorld(this.nuketown);
+      this.zombie.deactivate();
+      this.skirmish.deactivate();
+      this.aim.deactivate();
+      this.tdm.activate(this.nuketown);
     } else {
       this._useWorld(this.range);
       this.range.setLayout('practice');
       this.zombie.deactivate();
       this.skirmish.deactivate();
       this.aim.deactivate();
+      this.tdm.deactivate();
     }
-    // the bullseye drones (wandering + pop-up field) only live in the practice range
-    if (practice) { this.rangeDrone.enable(this.range); this.droneField.enable(this.range); }
+    // the bullseye drones (wandering + pop-up field) only live in the practice range,
+    // and only when toggled on via the console button
+    this._applyDrones(practice);
+  }
+
+  _applyDrones(practiceActive) {
+    const on = practiceActive && this._dronesOn;
+    if (on) { this.rangeDrone.enable(this.range); this.droneField.enable(this.range); }
     else { this.rangeDrone.disable(); this.droneField.disable(); }
+    if (practiceActive) {
+      this.range.setDroneButton(this._dronesOn);
+      this.bots.setSuppressed(!this._botsOn); // restore the dummy on/off state too
+      this.range.setBotButton(this._botsOn);
+    }
   }
 
   _ensureGraveyard() {
@@ -304,6 +376,10 @@ export class Game {
 
   _ensureAimArena() {
     if (!this.aimArena) this.aimArena = new AimArena(this.engine.scene);
+  }
+
+  _ensureNuketown() {
+    if (!this.nuketown) this.nuketown = new Nuketown(this.engine.scene);
   }
 
   /** Make `world` the active world: toggle visibility, re-tint atmosphere, and
@@ -411,23 +487,18 @@ export class Game {
     this.skirmish.update(dt);
     this.zombie.update(dt);
     this.aim.update(dt);
-    const frozen = this.skirmish.playerFrozen() || this.zombie.playerFrozen() || this.aim.playerFrozen();
+    this.tdm.update(dt);
+    const frozen = this.skirmish.playerFrozen() || this.zombie.playerFrozen() || this.aim.playerFrozen() || this.tdm.playerFrozen();
 
-    // radio comms wheel: hold ` to open, mouse to aim a slice, release to send.
-    // While open the look deltas drive the selector instead of the view.
+    // radio comms wheel: hold ` to open (look deltas drive the selector in
+    // _frameLook), release to send.
     if (this.input.pressed('RADIO') && !this.radio.active) this.radio.open();
-    if (this.radio.active) {
-      this.radio.addAim(this.input.mouseDX, this.input.mouseDY);
-      this.input.mouseDX = 0;
-      this.input.mouseDY = 0;
-      if (!this.input.isDown('RADIO')) { // released (or keys cleared on pause)
-        const c = this.radio.commit();
-        if (c) { this.audio.ui(); this.hud.showComms(this.settings.ign, c.text); }
-      }
+    if (this.radio.active && !this.input.isDown('RADIO')) {
+      const c = this.radio.commit();
+      if (c) { this.audio.ui(); this.hud.showComms(this.settings.ign, c.text); }
     }
 
-    // look first so movement basis + aim ray use this frame's orientation
-    this.cameraRig.consumeLook(dt);
+    this.cameraRig.decayRecoil(dt); // recoil recovery is fixed-step
 
     if (frozen) {
       // between rounds / dead: hold still but keep settling to the ground
@@ -446,23 +517,6 @@ export class Game {
     this.rangeDrone.update(dt); // move the flying bullseye + sync its scoring centre
     this.droneField.update(dt); // pop-up drones around the map
     if (!frozen && !this.radio.active) this.firing.update(dt);
-    // animate gun (pose/ADS/recoil kick/reload/swing + bob & look sway)
-    this.viewModel.update(dt, {
-      speed: Math.hypot(this.player.velocity.x, this.player.velocity.z),
-      lookDX: this.input.mouseDX,
-      lookDY: this.input.mouseDY,
-    });
-    this.cameraRig.updateTransform(dt); // position camera after the player has moved
-    if (this.zombie.cinematicActive) {
-      this.zombie.updateCinematicCamera(this.engine.camera, dt); // boss entrance
-      if (!this._cineGunHidden) { this.viewModel.setVisible(false); this._cineGunHidden = true; }
-    } else if (this._cineGunHidden) {
-      this.viewModel.setVisible(this.cameraRig.mode === 'first');
-      this._cineGunHidden = false;
-    }
-
-    // blind the screen when the camera is inside a smoke cloud
-    this.hud.setSmoke(this.abilities.visionObscure(this.engine.camera.position));
 
     this.world.update(dt); // animated map life (fans, flickering lights)
     // footstep audio while running on the ground
@@ -474,10 +528,39 @@ export class Game {
       this._stepT = 0;
     }
 
-    this.minimap.update();
-    this.hud.update(dt);
-    this.fx.update(dt);
-
     this.input.endFrame();
+  }
+
+  /** Once per rendered frame, before the sim steps: apply mouse-look (or route it
+   *  to the radio wheel). Decoupling look from the fixed step makes flicks track
+   *  the display's refresh rate exactly instead of the 120 Hz sim. */
+  _frameLook() {
+    const dx = this.input.mouseDX, dy = this.input.mouseDY;
+    this.input.mouseDX = 0; this.input.mouseDY = 0;
+    this._lookDX = dx; this._lookDY = dy;
+    if (this.radio.active) this.radio.addAim(dx, dy);
+    else this.cameraRig.applyLook(dx, dy);
+  }
+
+  /** Per rendered frame: position the camera + viewmodel + HUD at display rate. */
+  _render(alpha, frameTime) {
+    if (this.loop.running) {
+      this.cameraRig.updateTransform(frameTime); // camera tracks the latest player pos + look
+      const cine = this.zombie.cinematicActive;
+      if (cine) this.zombie.updateCinematicCamera(this.engine.camera, frameTime); // boss entrance
+      // gun shows only when alive, first-person, and not in a cinematic
+      this.viewModel.setVisible(this.cameraRig.mode === 'first' && this.player.alive && !cine);
+      this.viewModel.update(frameTime, {
+        speed: Math.hypot(this.player.velocity.x, this.player.velocity.z),
+        lookDX: this._lookDX, lookDY: this._lookDY,
+      });
+      this.hud.setSmoke(this.abilities.visionObscure(this.engine.camera.position));
+      this.minimap.update();
+      this.hud.update(frameTime);
+      this.fx.update(frameTime);
+    } else if (this._cineActive) {
+      this._cineUpdate(frameTime);
+    }
+    this.engine.render();
   }
 }

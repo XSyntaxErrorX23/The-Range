@@ -160,6 +160,7 @@ export class FiringController {
     const spread = deg2rad(spreadDeg);
     const pellets = w.pellets || 1;
     this._hits.clear();
+    let impact = null; // last surface/bot hit point (for explosive splash)
 
     // aggregate damage on a bot (zone multiplier + optional penetration multiplier)
     const hitBot = (bh, mult) => {
@@ -187,6 +188,7 @@ export class FiringController {
 
       // direct hit — no cover, or the bot is in front of it
       if (botHit && (!worldHit || botHit.distance <= worldHit.distance)) {
+        impact = botHit.point;
         hitBot(botHit, 1);
         continue;
       }
@@ -195,6 +197,9 @@ export class FiringController {
         const ud = worldHit.object.userData || {};
         // distance buttons: register the range change, leave no impact/decal
         if (ud.rangeButton != null) { bus.emit(EV.RANGE_DISTANCE, { distance: ud.rangeButton }); continue; }
+        // console toggles: flip the bullseye drones / the practice dummies, no decal
+        if (ud.droneToggle) { bus.emit(EV.RANGE_DRONES_TOGGLE, {}); continue; }
+        if (ud.botToggle) { bus.emit(EV.RANGE_BOTS_TOGGLE, {}); continue; }
         // accuracy target: score it (spark only, no decal — it moves)
         let movable = false;
         // aim-trainer orb: stop the bullet here with a spark, no decal (AimTrainer scores it)
@@ -208,19 +213,26 @@ export class FiringController {
         }
         // penetration: a bot behind LIGHT cover takes reduced damage (wallbang)
         if (botHit && ud.penetrable) hitBot(botHit, penMult(w));
+        impact = worldHit.point;
         // entry/surface impact (world-space normal so decals sit on rotated faces)
         const wn = (!movable && worldHit.face) ? worldHit.face.normal.clone().transformDirection(worldHit.object.matrixWorld) : null;
-        bus.emit(EV.COMBAT_MISS, { point: worldHit.point.clone(), normal: wn, from: this._origin.clone() });
+        bus.emit(EV.COMBAT_MISS, { point: worldHit.point.clone(), normal: wn, from: this._origin.clone(), color: w.tracerColor });
       } else if (pellets === 1) {
-        bus.emit(EV.COMBAT_MISS, { point: this._origin.clone().addScaledVector(this._jit, w.range), normal: null, from: this._origin.clone() });
+        impact = this._origin.clone().addScaledVector(this._jit, w.range);
+        bus.emit(EV.COMBAT_MISS, { point: impact.clone(), normal: null, from: this._origin.clone(), color: w.tracerColor });
       }
+    }
+
+    // explosive area blast (bazooka): damage everything near the impact point
+    if (w.splash && impact) {
+      bus.emit(EV.COMBAT_SPLASH, { point: impact.clone(), radius: w.splash.radius, damage: w.splash.damage, mult: this.damageMult || 1 });
     }
 
     // aggregated hit feedback (one marker/number per bot)
     for (const [bot, a] of this._hits) {
-      bus.emit(EV.COMBAT_HIT, { zone: a.head ? 'head' : 'body', damage: a.dmg, point: a.point.clone(), dead: a.dead, bot, from: this._origin.clone() });
+      bus.emit(EV.COMBAT_HIT, { zone: a.head ? 'head' : 'body', damage: a.dmg, point: a.point.clone(), dead: a.dead, bot, from: this._origin.clone(), color: w.tracerColor });
       if (a.head) bus.emit(EV.COMBAT_HEADSHOT, { damage: a.dmg, point: a.point.clone() });
-      if (a.dead) bus.emit(EV.COMBAT_KILL, { bot });
+      if (a.dead) bus.emit(EV.COMBAT_KILL, { bot, weaponId: w.id });
     }
   }
 
@@ -242,7 +254,7 @@ export class FiringController {
       const dead = bot.takeDamage(dmg, zone, botHit.point);
       bus.emit(EV.COMBAT_HIT, { zone, damage: dmg, point: botHit.point.clone(), dead, bot, from: null });
       if (zone === 'head') bus.emit(EV.COMBAT_HEADSHOT, { damage: dmg, point: botHit.point.clone() });
-      if (dead) bus.emit(EV.COMBAT_KILL, { bot });
+      if (dead) bus.emit(EV.COMBAT_KILL, { bot, weaponId: w.id });
       return;
     }
 
