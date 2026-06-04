@@ -1,0 +1,18 @@
+{
+  "name": "valorant-range",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A browser-based Valorant-style practice range built with three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "0.184.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
