@@ -11,8 +11,15 @@ const DEFAULTS = {
   infiniteAmmo: true, // matches the reference "Infinite Ammo ENABLED"
   crosshairColor: '#46e0d6',
   crosshairGap: 6,
+  crosshairLength: 8,
+  crosshairThickness: 2,
+  crosshairDot: true,
+  crosshairDotSize: 3,
+  crosshairOutline: true,
+  crosshairDynamic: true, // crosshair expands when firing (Valorant "firing error")
   botMode: 'static', // static | strafe | popup | skirmish | zombie
   aiDifficulty: 'hard', // skirmish opponent: easy | medium | hard
+  scopeMode: 'hold', // scoped weapons (snipers): hold | toggle
   ign: 'Agent', // in-game name (shown in killfeed)
   seenWelcome: false, // onboarding shown once
 };

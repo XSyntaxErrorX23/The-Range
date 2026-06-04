@@ -16,7 +16,11 @@
   --text-dim: #8b9aa3;
   --warm: #d8cbb0;
   --cross-color: #46e0d6;
-  --gap: 6px; /* crosshair gap, set live from JS */
+  --gap: 6px; /* crosshair gap, set live from JS (base + bloom) */
+  --cross-len: 8px;
+  --cross-thick: 2px;
+  --cross-dot: 3px;
+  --cross-shadow: 0 0 2px rgba(0, 0, 0, 0.9); /* outline */
   font-family: "Segoe UI", "Arial Narrow", system-ui, sans-serif;
 }
 
@@ -77,23 +81,58 @@ body.touch-mode #touch-ui { touch-action: none; }
 #crosshair .ch-line {
   position: absolute;
   background: var(--cross-color);
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--cross-shadow);
   transition: transform 0.04s linear;
 }
 #crosshair .ch-dot {
   position: absolute;
-  left: -1.5px; top: -1.5px;
-  width: 3px; height: 3px;
+  left: calc(var(--cross-dot) * -0.5); top: calc(var(--cross-dot) * -0.5);
+  width: var(--cross-dot); height: var(--cross-dot);
   background: var(--cross-color);
   border-radius: 50%;
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--cross-shadow);
 }
-/* lines are positioned via JS-set transforms using --gap */
-#crosshair .ch-top    { width: 2px; height: 8px; left: -1px; transform: translateY(calc(-1 * (var(--gap) + 8px))); }
-#crosshair .ch-bottom { width: 2px; height: 8px; left: -1px; transform: translateY(var(--gap)); }
-#crosshair .ch-left   { width: 8px; height: 2px; top: -1px;  transform: translateX(calc(-1 * (var(--gap) + 8px))); }
-#crosshair .ch-right  { width: 8px; height: 2px; top: -1px;  transform: translateX(var(--gap)); }
+/* vertical/horizontal arms sized from vars; gap (--gap) is animated live for bloom */
+#crosshair .ch-top, #crosshair .ch-bottom { width: var(--cross-thick); height: var(--cross-len); left: calc(var(--cross-thick) * -0.5); }
+#crosshair .ch-left, #crosshair .ch-right { width: var(--cross-len); height: var(--cross-thick); top: calc(var(--cross-thick) * -0.5); }
+#crosshair .ch-top    { transform: translateY(calc(-1 * (var(--gap) + var(--cross-len)))); }
+#crosshair .ch-bottom { transform: translateY(var(--gap)); }
+#crosshair .ch-left   { transform: translateX(calc(-1 * (var(--gap) + var(--cross-len)))); }
+#crosshair .ch-right  { transform: translateX(var(--gap)); }
+#crosshair.no-dot .ch-dot { display: none; }
 #crosshair.hidden { display: none; }
+
+/* Crosshair editor preview (mirrors #crosshair, scoped vars set inline) */
+.ch-preview-wrap {
+  position: relative;
+  width: 100%; height: 130px;
+  margin: 4px 0 14px;
+  border: 1px solid var(--panel-line);
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(45deg, #1b2730 0 14px, #16212a 14px 28px),
+    radial-gradient(circle at 50% 50%, rgba(70,224,214,0.10), transparent 60%);
+  overflow: hidden;
+}
+#ch-preview { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+#ch-preview .ch-line { position: absolute; background: var(--cross-color); box-shadow: var(--cross-shadow); }
+#ch-preview .ch-dot {
+  position: absolute;
+  left: calc(var(--cross-dot) * -0.5); top: calc(var(--cross-dot) * -0.5);
+  width: var(--cross-dot); height: var(--cross-dot);
+  background: var(--cross-color); border-radius: 50%; box-shadow: var(--cross-shadow);
+}
+#ch-preview .ch-top, #ch-preview .ch-bottom { width: var(--cross-thick); height: var(--cross-len); left: calc(var(--cross-thick) * -0.5); }
+#ch-preview .ch-left, #ch-preview .ch-right { width: var(--cross-len); height: var(--cross-thick); top: calc(var(--cross-thick) * -0.5); }
+#ch-preview .ch-top    { transform: translateY(calc(-1 * (var(--gap) + var(--cross-len)))); }
+#ch-preview .ch-bottom { transform: translateY(var(--gap)); }
+#ch-preview .ch-left   { transform: translateX(calc(-1 * (var(--gap) + var(--cross-len)))); }
+#ch-preview .ch-right  { transform: translateX(var(--gap)); }
+#ch-preview.no-dot .ch-dot { display: none; }
+.ch-code-btns { display: flex; gap: 8px; margin: 6px 0; }
+.ch-code-btns .btn { flex: 1; }
+.set-row.ch-code .ign-field { flex: 1; font-family: "Consolas", monospace; font-size: 12px; letter-spacing: 0.5px; }
+.ign-field.bad { border-color: var(--red); color: var(--red); }
 
 /* Hitmarker */
 #hitmarker {

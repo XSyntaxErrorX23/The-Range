@@ -245,9 +245,16 @@ export class HUD {
   }
 
   _applyCrosshairStyle() {
+    const s = this.settings;
     const r = document.documentElement.style;
-    r.setProperty('--cross-color', this.settings.crosshairColor);
-    this._setGap(this.baseGap);
+    r.setProperty('--cross-color', s.crosshairColor);
+    r.setProperty('--cross-len', (s.crosshairLength ?? 8) + 'px');
+    r.setProperty('--cross-thick', (s.crosshairThickness ?? 2) + 'px');
+    r.setProperty('--cross-dot', (s.crosshairDotSize ?? 3) + 'px');
+    r.setProperty('--cross-shadow', s.crosshairOutline ? '0 0 2px rgba(0,0,0,0.95), 0 0 1px rgba(0,0,0,1)' : 'none');
+    if (this.crosshair) this.crosshair.classList.toggle('no-dot', !s.crosshairDot);
+    this.baseGap = s.crosshairGap;
+    this._setGap(this.baseGap + (this.bloom || 0));
   }
 
   _setGap(px) {
@@ -297,9 +304,7 @@ export class HUD {
     document.getElementById('rp-mode').textContent = snap.botMode.toUpperCase();
     document.getElementById('rp-armor').textContent = snap.botArmor ? 'ENABLED' : 'DISABLED';
     document.getElementById('rp-ammo').textContent = snap.infiniteAmmo ? 'ENABLED' : 'DISABLED';
-    document.documentElement.style.setProperty('--cross-color', snap.crosshairColor);
-    this.baseGap = snap.crosshairGap;
-    this._setGap(this.baseGap + this.bloom);
+    this._applyCrosshairStyle();
     const pn = document.getElementById('pname');
     if (pn) pn.textContent = (snap.ign || 'Agent').replace(/[<>&]/g, '');
   }
@@ -339,7 +344,9 @@ export class HUD {
 
   setWeaponCrosshair(id, scopedADS) {
     this.weaponId = id;
-    this.baseGap = BASE_GAP[modelKeyFor(id)] ?? this.settings.crosshairGap;
+    // editor gap is the baseline (rifle); other weapons keep their relative offset
+    const off = (BASE_GAP[modelKeyFor(id)] ?? BASE_GAP.rifle) - BASE_GAP.rifle;
+    this.baseGap = Math.max(0, this.settings.crosshairGap + off);
     this._setGap(this.baseGap + this.bloom);
     // scoped sniper: hide crosshair, show scope
     this.crosshair.classList.toggle('hidden', scopedADS);
@@ -369,7 +376,7 @@ export class HUD {
       this.setWeaponCrosshair(weaponId, isADS && scoped);
     });
     bus.on(EV.COMBAT_FIRED, ({ weapon }) => {
-      const noBloom = weapon.type === 'melee' || weapon.category === 'special';
+      const noBloom = weapon.type === 'melee' || weapon.category === 'special' || !this.settings.crosshairDynamic;
       this.bloom = Math.min(14, this.bloom + (noBloom ? 0 : 5));
     });
     bus.on(EV.COMBAT_HIT, ({ zone, dead }) => {

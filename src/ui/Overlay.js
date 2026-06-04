@@ -40,6 +40,7 @@ export class Overlay {
     this.onRematch = () => {};
     this.onExitSkirmish = () => {};
     this.onContinue = () => {};
+    this.onMainMenu = () => {};
     this.getStats = () => ({ session: {}, lifetime: {} });
     this.onResetLifetime = () => {};
     this.getCredits = () => null; // null => free buying (non-zombie modes)
@@ -143,6 +144,7 @@ export class Overlay {
     pp.appendChild(this._btn('SETTINGS', 'secondary', () => this.openSettings()));
     pp.appendChild(this._btn('STATS', 'secondary', () => this.openStats()));
     pp.appendChild(this._btn('CONTROLS', 'secondary', () => this.openControls()));
+    pp.appendChild(this._btn('MAIN MENU', 'secondary', () => this.onMainMenu()));
     pp.appendChild(this._btn('RESET STATS', 'secondary', () => { this.onReset(); }));
     this.pause.appendChild(pp);
 
@@ -156,6 +158,11 @@ export class Overlay {
     this.settingsPanel = document.createElement('div'); this.settingsPanel.className = 'panel';
     this.settingsModal.appendChild(this.settingsPanel);
     this._buildSettings();
+
+    // ---- crosshair editor ----
+    this.crosshairModal = this._modal('m-crosshair');
+    this.crosshairPanel = document.createElement('div'); this.crosshairPanel.className = 'panel';
+    this.crosshairModal.appendChild(this.crosshairPanel);
 
     // ---- controls help ----
     this.controls = this._modal('m-controls');
@@ -221,20 +228,15 @@ export class Overlay {
     p.appendChild(this._slider('Mouse Sensitivity', 0.2, 3, 0.05, s.sensitivity, (v) => { s.set('sensitivity', v); }, (v) => v.toFixed(2)));
     p.appendChild(this._slider('Field of View', 70, 110, 1, s.fov, (v) => { s.set('fov', v); }, (v) => v + '°'));
     p.appendChild(this._slider('Volume', 0, 1, 0.05, s.volume, (v) => { s.set('volume', v); }, (v) => Math.round(v * 100) + '%'));
-    p.appendChild(this._slider('Crosshair Gap', 1, 16, 1, s.crosshairGap, (v) => { s.set('crosshairGap', v); }, (v) => String(v)));
 
     p.appendChild(this._select('View', [['first', 'First person'], ['third', 'Third person']], s.view, (v) => s.set('view', v)));
     p.appendChild(this._select('Bot Mode', [['static', 'Static'], ['strafe', 'Strafing'], ['popup', 'Pop-up drill'], ['skirmish', 'Skirmish (1v1)'], ['zombie', 'Zombie Survival']], s.botMode, (v) => s.set('botMode', v)));
     p.appendChild(this._select('AI Difficulty', [['easy', 'Easy'], ['medium', 'Medium'], ['hard', 'Hard']], s.aiDifficulty, (v) => s.set('aiDifficulty', v)));
+    p.appendChild(this._select('Scope Mode', [['hold', 'Hold'], ['toggle', 'Toggle']], s.scopeMode, (v) => s.set('scopeMode', v)));
     p.appendChild(this._toggle('Bot Armor', s.botArmor, (v) => s.set('botArmor', v)));
     p.appendChild(this._toggle('Infinite Ammo', s.infiniteAmmo, (v) => s.set('infiniteAmmo', v)));
 
-    const color = document.createElement('div'); color.className = 'set-row';
-    color.innerHTML = '<label>Crosshair Color</label>';
-    const ci = document.createElement('input'); ci.type = 'color'; ci.value = s.crosshairColor;
-    ci.addEventListener('input', () => s.set('crosshairColor', ci.value));
-    color.appendChild(ci);
-    p.appendChild(color);
+    p.appendChild(this._btn('CROSSHAIR EDITOR', 'secondary', () => this.openCrosshair()));
 
     const ignRow = this._el('div', 'set-row');
     ignRow.appendChild(this._el('label', null, 'IGN (Name)'));
@@ -245,6 +247,111 @@ export class Overlay {
     p.appendChild(ignRow);
 
     p.appendChild(this._btn('BACK', 'secondary', () => this.showPause()));
+  }
+
+  _buildCrosshair() {
+    const s = this.settings;
+    const p = this.crosshairPanel;
+    p.innerHTML = '<h2>CROSSHAIR EDITOR</h2>';
+
+    // live preview box
+    const wrap = this._el('div', 'ch-preview-wrap');
+    this.chPreview = this._el('div'); this.chPreview.id = 'ch-preview';
+    this.chPreview.innerHTML =
+      '<div class="ch-line ch-top"></div><div class="ch-line ch-bottom"></div>' +
+      '<div class="ch-line ch-left"></div><div class="ch-line ch-right"></div>' +
+      '<div class="ch-dot"></div>';
+    wrap.appendChild(this.chPreview);
+    p.appendChild(wrap);
+
+    // controls — each persists + refreshes the preview & code
+    const upd = () => { this._renderCrosshairPreview(); this._refreshCrosshairCode(); };
+    p.appendChild(this._slider('Gap', 0, 20, 1, s.crosshairGap, (v) => { s.set('crosshairGap', v); upd(); }, (v) => String(v)));
+    p.appendChild(this._slider('Length', 0, 30, 1, s.crosshairLength, (v) => { s.set('crosshairLength', v); upd(); }, (v) => String(v)));
+    p.appendChild(this._slider('Thickness', 1, 8, 1, s.crosshairThickness, (v) => { s.set('crosshairThickness', v); upd(); }, (v) => String(v)));
+    p.appendChild(this._toggle('Center Dot', s.crosshairDot, (v) => { s.set('crosshairDot', v); upd(); }));
+    p.appendChild(this._slider('Dot Size', 1, 8, 1, s.crosshairDotSize, (v) => { s.set('crosshairDotSize', v); upd(); }, (v) => String(v)));
+    p.appendChild(this._toggle('Outline', s.crosshairOutline, (v) => { s.set('crosshairOutline', v); upd(); }));
+    p.appendChild(this._toggle('Dynamic (expand when firing)', s.crosshairDynamic, (v) => { s.set('crosshairDynamic', v); }));
+
+    const color = this._el('div', 'set-row');
+    color.appendChild(this._el('label', null, 'Color'));
+    const ci = document.createElement('input'); ci.type = 'color'; ci.value = s.crosshairColor;
+    ci.addEventListener('input', () => { s.set('crosshairColor', ci.value); upd(); });
+    color.appendChild(ci);
+    p.appendChild(color);
+
+    // import / export code
+    const codeRow = this._el('div', 'set-row ch-code');
+    codeRow.appendChild(this._el('label', null, 'Code'));
+    this.chCodeInput = document.createElement('input');
+    this.chCodeInput.type = 'text'; this.chCodeInput.spellcheck = false; this.chCodeInput.className = 'ign-field';
+    codeRow.appendChild(this.chCodeInput);
+    p.appendChild(codeRow);
+
+    const btns = this._el('div', 'ch-code-btns');
+    btns.appendChild(this._btn('COPY', 'secondary', () => {
+      try { navigator.clipboard && navigator.clipboard.writeText(this.chCodeInput.value); } catch (_) {}
+      this.chCodeInput.select && this.chCodeInput.select();
+    }));
+    btns.appendChild(this._btn('IMPORT', 'secondary', () => {
+      const ok = this._applyCrosshairCode(this.chCodeInput.value);
+      if (ok) this._buildCrosshair(); // rebuild controls from imported values
+      else { this.chCodeInput.classList.add('bad'); setTimeout(() => this.chCodeInput.classList.remove('bad'), 600); }
+    }));
+    btns.appendChild(this._btn('RESET', 'secondary', () => {
+      s.set('crosshairColor', '#46e0d6'); s.set('crosshairGap', 6); s.set('crosshairLength', 8);
+      s.set('crosshairThickness', 2); s.set('crosshairDot', true); s.set('crosshairDotSize', 3); s.set('crosshairOutline', true);
+      s.set('crosshairDynamic', true);
+      this._buildCrosshair();
+    }));
+    p.appendChild(btns);
+
+    p.appendChild(this._btn('BACK', 'secondary', () => this.openSettings()));
+
+    this._renderCrosshairPreview();
+    this._refreshCrosshairCode();
+  }
+
+  _renderCrosshairPreview() {
+    const s = this.settings, el = this.chPreview;
+    if (!el) return;
+    el.style.setProperty('--cross-color', s.crosshairColor);
+    el.style.setProperty('--cross-len', s.crosshairLength + 'px');
+    el.style.setProperty('--cross-thick', s.crosshairThickness + 'px');
+    el.style.setProperty('--cross-dot', s.crosshairDotSize + 'px');
+    el.style.setProperty('--gap', s.crosshairGap + 'px');
+    el.style.setProperty('--cross-shadow', s.crosshairOutline ? '0 0 2px rgba(0,0,0,0.95), 0 0 1px rgba(0,0,0,1)' : 'none');
+    el.classList.toggle('no-dot', !s.crosshairDot);
+  }
+
+  /** Compact, shareable crosshair code (Valorant-style). */
+  _crosshairCode() {
+    const s = this.settings;
+    const hex = (s.crosshairColor || '#46e0d6').replace('#', '').toLowerCase();
+    return ['RNG1', hex, s.crosshairGap, s.crosshairLength, s.crosshairThickness,
+      s.crosshairDot ? 1 : 0, s.crosshairDotSize, s.crosshairOutline ? 1 : 0,
+      s.crosshairDynamic ? 1 : 0].join('-');
+  }
+
+  _refreshCrosshairCode() { if (this.chCodeInput) this.chCodeInput.value = this._crosshairCode(); }
+
+  _applyCrosshairCode(code) {
+    const parts = (code || '').trim().split('-');
+    if (parts[0] !== 'RNG1' || parts.length < 8) return false;
+    const [, hex, gap, len, th, dot, ds, out, dyn] = parts;
+    if (!/^[0-9a-fA-F]{6}$/.test(hex)) return false;
+    const num = (v, lo, hi, d) => { const n = parseFloat(v); return isNaN(n) ? d : Math.max(lo, Math.min(hi, Math.round(n))); };
+    const s = this.settings;
+    s.set('crosshairColor', '#' + hex.toLowerCase());
+    s.set('crosshairGap', num(gap, 0, 20, 6));
+    s.set('crosshairLength', num(len, 0, 30, 8));
+    s.set('crosshairThickness', num(th, 1, 8, 2));
+    s.set('crosshairDot', dot === '1');
+    s.set('crosshairDotSize', num(ds, 1, 8, 3));
+    s.set('crosshairOutline', out === '1');
+    s.set('crosshairDynamic', dyn === undefined ? true : dyn === '1');
+    return true;
   }
 
   _el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
@@ -357,6 +464,7 @@ export class Overlay {
     this._show(this.result);
   }
   openSettings() { this._buildSettings(); this._show(this.settingsModal); }
+  openCrosshair() { this._buildCrosshair(); this._show(this.crosshairModal); }
   openControls() { this._show(this.controls); }
 
   openStats() {
@@ -408,7 +516,7 @@ export class Overlay {
     window.removeEventListener('keydown', this._pauseKeyHandler);
     this._pauseEscReady = false;
     clearTimeout(this._resumeRetry);
-    for (const m of [this.start, this.pause, this.settingsModal, this.controls, this.buymenu, this.patchnotes, this.result, this.statsModal]) {
+    for (const m of [this.start, this.pause, this.settingsModal, this.crosshairModal, this.controls, this.buymenu, this.patchnotes, this.result, this.statsModal]) {
       m.classList.remove('show');
     }
     this.current = null;

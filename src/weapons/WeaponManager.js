@@ -80,6 +80,7 @@ export class WeaponManager {
     this.reloading = false;
     this.reloadTimer = 0;
     this.isADS = false;
+    this._scopeToggle = false; // unscope on weapon switch (toggle mode)
     this.engine.setFovMult(1);
     this.equipping = instant ? 0 : WEAPONS[id].swapTime;
     this.viewModel.setWeapon(id);
@@ -183,7 +184,14 @@ export class WeaponManager {
     if (this.input.pressed('RELOAD')) this.startReload();
 
     const w = this.weapon;
-    const wantADS = this.input.adsDown() && w.canADS && !this.isBusy();
+    let wantADS;
+    if (w.canADS && w.scoped && this.settings.scopeMode === 'toggle') {
+      // toggle: right-click flips the scope on/off
+      if (this.input.altPressed()) this._scopeToggle = !this._scopeToggle;
+      wantADS = this._scopeToggle && !this.isBusy();
+    } else {
+      wantADS = this.input.adsDown() && w.canADS && !this.isBusy();
+    }
     if (wantADS !== this.isADS) {
       this.isADS = wantADS;
       this.engine.setFovMult(this.isADS ? w.adsFovMult : 1);

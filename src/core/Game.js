@@ -206,6 +206,18 @@ export class Game {
     };
     this.overlay.onExitSkirmish = () => { this.settings.set('botMode', 'static'); this.input.requestLock(); };
 
+    // pause -> Main Menu: return to the start screen (with the flythrough) and
+    // reset the selected mode to a fresh state, ready to re-enter.
+    this.overlay.onMainMenu = () => {
+      this._hasPlayed = false;
+      this._cineActive = true;
+      this._cineGunHidden = false;
+      this.hud.hide();
+      this.viewModel.setVisible(false);
+      this._setMode(this.settings.botMode); // re-arm the current mode fresh
+      this.overlay.showStart();
+    };
+
     // match over -> show the result screen (unlock so the cursor returns)
     this.skirmish.onMatchEnd = (win) => {
       this.overlay.showResult({ win, playerScore: this.skirmish.playerScore, enemyScore: this.skirmish.enemyScore });

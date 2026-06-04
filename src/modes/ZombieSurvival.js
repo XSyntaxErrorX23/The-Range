@@ -20,7 +20,7 @@ const BOOST_TIME = 9;       // speed / damage boost duration
 const TOTAL_WAVES = 5;
 const INTERMISSION = 12;   // seconds between waves (buy window)
 const SPAWN_INTERVAL = 0.8; // stagger zombie spawns
-const DEATH_FREEZE = 1.6;  // pause after a life is lost
+const DEATH_FREEZE = 1.2;  // pause after a life is lost
 const INVULN = 2.2;        // grace period after respawn
 const BOSS_INTRO = 4.5;    // cinematic entrance length
 const MAX_ALIVE = 26;      // cap concurrent zombies (perf)
@@ -245,17 +245,24 @@ export class ZombieSurvival {
       }
     }
 
+    // player death freeze -> respawn after a beat
     if (this._deathTimer > 0) {
       this._deathTimer -= dt;
       if (this._deathTimer <= 0) this._respawn();
-    } else if (this.phase === 'live') {
+    }
+
+    // wave progression keeps running through the down so the yard never empties;
+    // a wave only *completes* once the player is back up.
+    if (this.phase === 'live') {
       this._spawnTick(dt);
-      if (this.toSpawn <= 0 && this._aliveCount() === 0) this._waveCleared();
+      if (this._deathTimer <= 0 && this.toSpawn <= 0 && this._aliveCount() === 0) this._waveCleared();
     } else if (this.phase === 'intermission') {
-      this.timer -= dt;
-      if (this.timer <= 0) this._startWave(this.wave + 1);
+      if (this._deathTimer <= 0) {
+        this.timer -= dt;
+        if (this.timer <= 0) this._startWave(this.wave + 1);
+      }
     } else if (this.phase === 'boss') {
-      if (this.boss && !this.boss.alive) { this._onBossDead(); }
+      if (this.boss && !this.boss.alive) this._onBossDead();
     }
 
     this._maybeEmit();
