@@ -28,6 +28,20 @@ export class Range {
     this.solids = [];
     this.laneSpawns = [];
 
+    // Props live in layers: 'base' (always shown), 'practice' (range drills) and
+    // 'arena' (symmetrical 1v1). setLayout() swaps which non-base layer is active.
+    this._curLayer = 'base';
+    this._layer = {
+      base: { boxes: [], solids: [], occ: [] },
+      practice: { boxes: [], solids: [], occ: [] },
+      arena: { boxes: [], solids: [], occ: [] },
+    };
+    this.practiceGroup = new THREE.Group();
+    this.arenaGroup = new THREE.Group();
+    this.group.add(this.practiceGroup);
+    this.group.add(this.arenaGroup);
+    this.layout = 'practice';
+
     // procedural textures (shared bump canvas, wrapped per-surface)
     const bump = bumpCanvas();
     this.mat = {
@@ -58,29 +72,53 @@ export class Range {
     };
 
     setupLights(scene);
+    // base structure — always present
     this._buildShell();
-    this._buildFloorMarkings();
     this._buildTrusses();
     this._buildPillars();
-    this._buildStairs();
     this._buildLightFixtures();
+    // practice-range props (hidden in skirmish)
+    this._curLayer = 'practice';
+    this._buildFloorMarkings();
+    this._buildStairs();
     this._buildProps();
     this._buildSpawnConsole();
     this._buildTargetZone();
     this._buildCrates();
     this._buildParkour();
+    // symmetrical 1v1 arena (hidden in practice)
+    this._curLayer = 'arena';
+    this._buildArena();
+    this._curLayer = 'base';
 
     this.scoreboard = new Scoreboard(scene, new THREE.Vector3(0, 5.3, 30));
+    this.setLayout('practice');
   }
 
-  _add(mesh, { collide = false, occlude = false, solid = false } = {}) {
-    this.group.add(mesh);
-    if (occlude) this.colliderMeshes.push(mesh);
-    if (solid) this.solids.push(mesh);
+  /** Show one prop layer ('practice' | 'arena') over the base and recompute the
+   *  active collision/occlusion/solid lists. Other systems read these via the
+   *  world object each frame, so reassigning the arrays is safe. */
+  setLayout(name) {
+    this.layout = name;
+    this.practiceGroup.visible = name === 'practice';
+    this.arenaGroup.visible = name === 'arena';
+    const L = this._layer;
+    this.boxes = L.base.boxes.concat(L[name].boxes);
+    this.solids = L.base.solids.concat(L[name].solids);
+    this.colliderMeshes = L.base.occ.concat(L[name].occ);
+  }
+
+  _add(mesh, { collide = false, occlude = false, solid = false } = {}, layer) {
+    const lyr = layer || this._curLayer || 'base';
+    const parent = lyr === 'practice' ? this.practiceGroup : lyr === 'arena' ? this.arenaGroup : this.group;
+    parent.add(mesh);
+    const L = this._layer[lyr];
+    if (occlude) L.occ.push(mesh);
+    if (solid) L.solids.push(mesh);
     if (collide) {
       mesh.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(mesh);
-      this.boxes.push({
+      L.boxes.push({
         minX: box.min.x, maxX: box.max.x,
         minY: box.min.y, maxY: box.max.y,
         minZ: box.min.z, maxZ: box.max.z,
@@ -273,5 +311,58 @@ export class Range {
     }
     // a teal pad marking the launch box
     this._add(this._box(2.2, 0.04, 2.2, -18, 1.62, 14, this.mat.accent), { solid: true });
+  }
+
+  /**
+   * Symmetrical 1v1 arena, mirrored across x=0 and across the centre line z=17
+   * so both fighters face an identical layout. Cover crates/walls/barrels plus
+   * decorative planters and a centre accent ring for some life.
+   */
+  _buildArena() {
+    const CZ = 17; // centre line
+    const crate = this.mat.crate, metal = this.mat.metal, wall = this.mat.wall;
+    const foliage = new THREE.MeshStandardMaterial({ color: 0x3f7d3a, roughness: 0.85, metalness: 0 });
+    const planter = new THREE.MeshStandardMaterial({ color: 0x5a4634, roughness: 0.75, metalness: 0.1 });
+
+    const cover = (x, z, w, h, d, mat) => {
+      const m = this._box(w, h, d, x, h / 2, z, mat);
+      m.castShadow = true; m.receiveShadow = true;
+      this._add(m, { collide: true, solid: true, occlude: true });
+    };
+    // place a cover piece + its mirrors across x=0 and z=CZ (4-fold symmetry)
+    const sym = (x, z, w, h, d, mat = crate) => {
+      const xs = x === 0 ? [0] : [x, -x];
+      const zs = z === CZ ? [CZ] : [z, 2 * CZ - z];
+      for (const sx of xs) for (const sz of zs) cover(sx, sz, w, h, d, mat);
+    };
+
+    sym(0, CZ, 1.6, 2.2, 1.6, metal);       // centre pillar
+    sym(5.5, CZ, 1.2, 1.3, 3.4, crate);     // mid flank blocks
+    sym(8.6, 10.5, 1.5, 1.5, 1.5, crate);   // quadrant crates
+    sym(12.6, 12, 1.0, 1.9, 4.2, wall);     // tall side walls
+    sym(4.2, 7.5, 1.9, 1.0, 1.9, crate);    // low cover near spawns
+    sym(11.2, 6.5, 1.4, 1.4, 1.4, crate);   // corner crates
+
+    // barrels flanking the centre
+    const barrel = (x, z) => {
+      const b = this._cyl(0.34, 0.36, 1.1, x, 0.55, z, metal, 18);
+      b.castShadow = true; b.receiveShadow = true;
+      this._add(b, { collide: true, solid: true, occlude: true });
+      this._add(this._cyl(0.37, 0.37, 0.06, x, 0.85, z, this.mat.accent, 18), { solid: true });
+    };
+    barrel(9, CZ); barrel(-9, CZ);
+
+    // decorative planters with foliage (collidable base)
+    const plant = (x, z) => {
+      const base = this._box(0.95, 0.6, 0.95, x, 0.3, z, planter);
+      base.castShadow = true; this._add(base, { collide: true, solid: true });
+      const bush = new THREE.Mesh(new THREE.SphereGeometry(0.72, 12, 10), foliage);
+      bush.position.set(x, 1.12, z); bush.castShadow = true;
+      this._add(bush, { solid: true });
+    };
+    for (const [x, z] of [[14, 8], [14, 26]]) { plant(x, z); plant(-x, z); }
+
+    // centre accent ring on the floor
+    this._add(this._cyl(3.4, 3.4, 0.04, 0, 0.02, CZ, this.mat.accent, 40), { solid: true });
   }
 }

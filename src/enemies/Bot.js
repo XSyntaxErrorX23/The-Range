@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { damp } from '../util/math.js';
+import { buildWeaponModel } from '../weapons/weaponModel.js';
 
 const easeOutBack = (k) => { const c = 1.70158; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
 
@@ -53,6 +54,23 @@ export class Bot {
     this.strafeMax = 1;
     this.respawnTimer = 0;
     this.lifeTimer = 0; // popup mode
+
+    // held weapon (skirmish enemies only; practice dummies stay unarmed)
+    this.armed = false;
+    this.weaponId = null;
+    this._gun = null;
+  }
+
+  /** Attach/replace a held weapon model (puts the bot into an aiming pose). */
+  setWeaponModel(id) {
+    const holder = this.parts.weaponHolder;
+    if (!holder) return;
+    if (this._gun) holder.remove(this._gun);
+    this._gun = buildWeaponModel(id);
+    this._gun.scale.setScalar(0.9);
+    holder.add(this._gun);
+    this.armed = true;
+    this.weaponId = id;
   }
 
   _mesh(geo, mat, x, y, z, cast = true) {
@@ -116,6 +134,14 @@ export class Bot {
     headG.add(this._mesh(new THREE.BoxGeometry(0.3, 0.09, 0.06), this.visorMat, 0, 0.0, 0.18));
     this.parts.head = headG;
     v.add(headG);
+
+    // weapon holder (chest height, right side) — barrel flipped to face the
+    // bot's forward (+Z). Empty unless setWeaponModel() attaches a gun.
+    const holder = new THREE.Group();
+    holder.position.set(0.2, 1.32, 0.42);
+    holder.rotation.y = Math.PI;
+    this.parts.weaponHolder = holder;
+    v.add(holder);
   }
 
   _collider(geo, y, zone) {
@@ -222,8 +248,14 @@ export class Bot {
     const idle = Math.sin(t * 1.4) * 0.05 * (1 - inten);
     p.leftLeg.rotation.x = s * amp;
     p.rightLeg.rotation.x = -s * amp;
-    p.leftArm.rotation.x = -s * amp * 0.8 - 0.05 + idle;
-    p.rightArm.rotation.x = s * amp * 0.8 - 0.05 - idle;
+    if (this.armed) {
+      // both hands forward, gripping the held weapon toward the target
+      p.leftArm.rotation.set(-1.18, 0, 0.22);
+      p.rightArm.rotation.set(-1.28, 0, -0.12);
+    } else {
+      p.leftArm.rotation.x = -s * amp * 0.8 - 0.05 + idle;
+      p.rightArm.rotation.x = s * amp * 0.8 - 0.05 - idle;
+    }
     const dir = Math.sign(this.strafeVel) || 0;
     this.visual.rotation.z = damp(this.visual.rotation.z, -dir * 0.13 * inten, 10, dt);
 

@@ -1,4 +1,4 @@
-import { WEAPONS, PRIMARY_CATEGORIES, DEFAULT_PRIMARY, DEFAULT_SIDEARM } from './weapons.config.js';
+import { WEAPONS, PRIMARY_CATEGORIES, DEFAULT_PRIMARY, DEFAULT_SIDEARM, weaponMoveMult } from './weapons.config.js';
 import { bus, EV } from '../core/events.js';
 
 /**
@@ -45,6 +45,9 @@ export class WeaponManager {
     if (!this.isADS) return 1;
     return this.weapon.scoped ? 0.5 : 0.75;
   }
+
+  /** Weight-based movement multiplier for the equipped weapon. */
+  equipSpeedMult() { return weaponMoveMult(this.currentId); }
 
   equip(id, instant = false) {
     if (!WEAPONS[id]) return;

@@ -15,7 +15,7 @@ const CONTROLS = [
   ['Mouse', 'Look'], ['LMB', 'Fire'], ['RMB', 'Aim (ADS) / Classic burst'], ['R', 'Reload'],
   ['1 / 2 / 3', 'Primary / Pistol / Knife'], ['B', 'Armory (buy menu)'], ['Wheel', 'Cycle weapons'],
   ['C', 'Cloudburst (smoke)'], ['Q', 'Updraft'], ['E', 'Tailwind (dash)'], ['X', 'Blade Storm'],
-  ['V', 'Toggle 1st/3rd person'], ['F2', 'Range settings'], ['Esc', 'Pause'],
+  ['V', 'Toggle 1st/3rd person'], ['`', 'Radio comms'], ['F2', 'Range settings'], ['Esc', 'Pause'],
 ];
 
 /**
@@ -71,6 +71,21 @@ export class Overlay {
       `<div class="version-badge">v${VERSION}</div>` +
       '<h1>THE <span class="accent">RANGE</span></h1>' +
       `<div class="subtitle">${returning ? 'Welcome back, agent' : 'Practice · Skills Test'}</div>`;
+
+    // mode selector (Practice Range vs Skirmish 1v1)
+    this._practiceMode = this.settings.botMode !== 'skirmish' ? this.settings.botMode : 'static';
+    this.modeRow = this._el('div', 'mode-row');
+    const mkMode = (key, title, desc) => {
+      const b = document.createElement('button');
+      b.className = 'mode-btn';
+      b.dataset.mode = key;
+      b.innerHTML = `<span class="mode-title">${title}</span><span class="mode-desc">${desc}</span>`;
+      b.addEventListener('click', () => { this.audio && this.audio.ui(); this._selectMode(key); });
+      return b;
+    };
+    this.modeRow.appendChild(mkMode('practice', 'PRACTICE RANGE', 'Drills & dummies'));
+    this.modeRow.appendChild(mkMode('skirmish', 'SKIRMISH 1V1', 'Duel a bot · first to 5'));
+    sp.appendChild(this.modeRow);
 
     // IGN entry
     const ignRow = this._el('div', 'ign-row');
@@ -269,7 +284,21 @@ export class Overlay {
     this.onPlay();
   }
 
-  showStart() { this._show(this.start); }
+  _selectMode(key) {
+    if (key === 'skirmish') this.settings.set('botMode', 'skirmish');
+    else this.settings.set('botMode', this._practiceMode || 'static');
+    this._refreshModeButtons();
+  }
+
+  _refreshModeButtons() {
+    if (!this.modeRow) return;
+    const isSkirm = this.settings.botMode === 'skirmish';
+    for (const b of this.modeRow.children) {
+      b.classList.toggle('sel', (b.dataset.mode === 'skirmish') === isSkirm);
+    }
+  }
+
+  showStart() { this._refreshModeButtons(); this._show(this.start); }
   showPause() { this._show(this.pause); }
 
   showResult({ win, playerScore, enemyScore }) {

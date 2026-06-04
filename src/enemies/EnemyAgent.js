@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Bot } from './Bot.js';
 import { bus, EV } from '../core/events.js';
-import { WEAPONS } from '../weapons/weapons.config.js';
+import { WEAPONS, weaponMoveMult } from '../weapons/weapons.config.js';
 
 /**
  * A fighting opponent for skirmish (1v1). Wraps a `Bot` for the visual, colliders
@@ -50,6 +50,7 @@ export class EnemyAgent {
     this.weaponId = WEAPONS[id] ? id : 'vandal';
     this.weapon = WEAPONS[this.weaponId];
     this.mag = this.weapon.magSize;
+    this.bot.setWeaponModel(this.weaponId); // show the matching gun model
   }
 
   _reset() {
@@ -125,7 +126,7 @@ export class EnemyAgent {
 
     const ml = Math.hypot(mvx, mvz);
     if (ml > 1e-3) { mvx /= ml; mvz /= ml; }
-    const speed = this.diff.moveSpeed;
+    const speed = this.diff.moveSpeed * weaponMoveMult(this.weaponId); // heavier gun = slower
     b.x += mvx * speed * dt;
     b.z += mvz * speed * dt;
     this._avoid(b);

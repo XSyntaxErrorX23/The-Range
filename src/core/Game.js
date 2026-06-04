@@ -20,6 +20,8 @@ import { FXManager } from '../fx/FXManager.js';
 import { Settings } from '../ui/Settings.js';
 import { HUD } from '../ui/HUD.js';
 import { Overlay } from '../ui/Overlay.js';
+import { Minimap } from '../ui/Minimap.js';
+import { CommsWheel } from '../ui/CommsWheel.js';
 
 /**
  * Top-level orchestrator: constructs every system, wires the fixed-step loop,
@@ -65,6 +67,7 @@ export class Game {
       cameraRig: this.cameraRig,
       bots: this.bots,
       settings: this.settings,
+      weapons: this.weapons,
     });
 
     // UI / FX (HUD builds #damage-layer that FXManager uses — build HUD first)
@@ -72,6 +75,10 @@ export class Game {
     this.fx = new FXManager(this.engine.scene, this.engine.camera);
     this.score = new ScoreManager(this.world.scoreboard);
     this.overlay = new Overlay(document.getElementById('overlay'), this.settings, this.audio);
+    this.minimap = new Minimap(document.getElementById('hud'), {
+      player: this.player, cameraRig: this.cameraRig, world: this.world, bots: this.bots,
+    });
+    this.radio = new CommsWheel(document.body);
 
     // Jett abilities (created after HUD so its initial charge emit reaches the HUD)
     this.abilities = new Abilities({
@@ -129,11 +136,16 @@ export class Game {
     };
   }
 
-  /** Switch range mode, activating/deactivating the skirmish coordinator. */
+  /** Switch range mode, swapping the map layout + skirmish coordinator. */
   _setMode(mode) {
     this.bots.setMode(mode);
-    if (mode === 'skirmish') this.skirmish.activate();
-    else this.skirmish.deactivate();
+    if (mode === 'skirmish') {
+      this.world.setLayout('arena');
+      this.skirmish.activate();
+    } else {
+      this.world.setLayout('practice');
+      this.skirmish.deactivate();
+    }
   }
 
   _wireLock() {
@@ -214,6 +226,19 @@ export class Game {
     this.skirmish.update(dt);
     const frozen = this.skirmish.playerFrozen();
 
+    // radio comms wheel: hold ` to open, mouse to aim a slice, release to send.
+    // While open the look deltas drive the selector instead of the view.
+    if (this.input.pressed('RADIO') && !this.radio.active) this.radio.open();
+    if (this.radio.active) {
+      this.radio.addAim(this.input.mouseDX, this.input.mouseDY);
+      this.input.mouseDX = 0;
+      this.input.mouseDY = 0;
+      if (!this.input.isDown('RADIO')) { // released (or keys cleared on pause)
+        const c = this.radio.commit();
+        if (c) { this.audio.ui(); this.hud.showComms(this.settings.ign, c.text); }
+      }
+    }
+
     // look first so movement basis + aim ray use this frame's orientation
     this.cameraRig.consumeLook(dt);
 
@@ -230,7 +255,7 @@ export class Game {
     this.player.position.addScaledVector(this.player.velocity, dt); // integrate
     resolveCollision(this.player, this.world);
     this.weapons.update(dt);
-    if (!frozen) this.firing.update(dt);
+    if (!frozen && !this.radio.active) this.firing.update(dt);
     this.bots.update(dt);
     // animate gun (pose/ADS/recoil kick/reload/swing + bob & look sway)
     this.viewModel.update(dt, {
@@ -240,6 +265,7 @@ export class Game {
     });
     this.cameraRig.updateTransform(dt); // position camera after the player has moved
 
+    this.minimap.update();
     this.hud.update(dt);
     this.fx.update(dt);
 

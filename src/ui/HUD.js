@@ -161,7 +161,15 @@ export class HUD {
     this.root.appendChild(this.hurt);
     this.announce = this._el('div'); this.announce.id = 'announce';
     this.root.appendChild(this.announce);
+    this.commsfeed = this._el('div'); this.commsfeed.id = 'commsfeed';
+    this.root.appendChild(this.commsfeed);
     this._lastHealth = 100;
+  }
+
+  showComms(name, text) {
+    const ign = (name || 'Agent').replace(/[<>&]/g, '');
+    this.commsfeed.innerHTML = `<span class="cf-name">${ign}</span> ${text}`;
+    this._flash(this.commsfeed);
   }
 
   setHealth({ health, armor }) {
@@ -180,7 +188,7 @@ export class HUD {
     document.getElementById('du-p').textContent = String(s.playerScore);
     document.getElementById('du-e').textContent = String(s.enemyScore);
     document.getElementById('du-target').textContent = 'FIRST TO ' + s.target;
-    document.getElementById('eh-name').textContent = (s.enemyName || 'ENEMY').toUpperCase();
+    document.getElementById('eh-name').textContent = 'ENEMY · ' + (s.enemyName || 'BOT').toUpperCase();
     const fill = document.getElementById('eh-fill');
     if (fill) fill.style.width = Math.max(0, Math.round(100 * s.enemyHealth / (s.enemyMax || 100))) + '%';
   }

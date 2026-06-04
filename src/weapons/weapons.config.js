@@ -158,6 +158,22 @@ export const PRIMARY_CATEGORIES = ['smg', 'shotgun', 'rifle', 'sniper', 'mg'];
 export const DEFAULT_PRIMARY = 'vandal';
 export const DEFAULT_SIDEARM = 'classic';
 
+// Weapon weight -> player/enemy movement-speed multiplier. Knife is lightest
+// (fastest); snipers and machine guns are heaviest (slowest). Per-id overrides
+// handle the chunkiest guns (Operator, Odin).
+const MOVE_BY_CATEGORY = {
+  melee: 1.12, special: 1.1, sidearm: 1.05, smg: 1.0,
+  shotgun: 0.96, rifle: 0.95, sniper: 0.92, mg: 0.9,
+};
+const MOVE_OVERRIDE = { operator: 0.82, odin: 0.84, ares: 0.9, outlaw: 0.88, marshal: 0.96 };
+
+/** Movement-speed multiplier for the equipped weapon (1 = base run speed). */
+export function weaponMoveMult(id) {
+  if (MOVE_OVERRIDE[id] != null) return MOVE_OVERRIDE[id];
+  const c = WEAPONS[id]?.category;
+  return MOVE_BY_CATEGORY[c] ?? 1;
+}
+
 // maps a weapon to the viewmodel/icon family it uses
 export function modelKeyFor(id) {
   const c = WEAPONS[id]?.category;

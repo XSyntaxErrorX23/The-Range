@@ -15,13 +15,15 @@ const RESPAWN_DELAY = 2.2;
 const ENEMY_WEAPONS = ['vandal', 'phantom', 'bulldog', 'spectre', 'sheriff', 'guardian', 'stinger', 'marshal'];
 
 export class Skirmish {
-  constructor({ scene, world, player, cameraRig, bots, settings }) {
+  constructor({ scene, world, player, cameraRig, bots, settings, weapons }) {
     this.scene = scene;
     this.world = world;
     this.player = player;
     this.cameraRig = cameraRig;
     this.bots = bots;
     this.settings = settings;
+    this.weapons = weapons;
+    this._savedLoadout = null;
 
     this.enemy = null;
     this.active = false;
@@ -46,6 +48,8 @@ export class Skirmish {
 
   activate() {
     this._ensureEnemy();
+    // remember the player's chosen loadout so we can restore it on exit
+    this._savedLoadout = { primaryId: this.weapons.primaryId, sidearmId: this.weapons.sidearmId };
     this.active = true;
     this.playerScore = 0;
     this.enemyScore = 0;
@@ -57,6 +61,13 @@ export class Skirmish {
     this.phase = 'idle';
     if (this.enemy) this.enemy.hide();
     this.bots.skirmishEnemyBot = null;
+    // restore the player's pre-skirmish loadout
+    if (this._savedLoadout) {
+      this.weapons.primaryId = this._savedLoadout.primaryId;
+      this.weapons.sidearmId = this._savedLoadout.sidearmId;
+      this.weapons.equip(this._savedLoadout.primaryId);
+      this._savedLoadout = null;
+    }
     // restore the player to full health for range modes
     this.player.health = this.player.maxHealth;
     this.player.armor = 0;
@@ -75,21 +86,26 @@ export class Skirmish {
 
   startRound() {
     this.scored = false;
-    // player spawns behind the firing line, facing downrange
-    this.player.spawnReset(new THREE.Vector3((Math.random() - 0.5) * 8, 0, -6));
-    this.cameraRig.yaw = Math.PI;
+    // both reset to facing positions around the arena's centre each round
+    this.player.spawnReset(new THREE.Vector3((Math.random() - 0.5) * 6, 0, 5));
+    this.cameraRig.yaw = Math.PI; // face downrange (+Z) toward the enemy
     this.cameraRig.pitch = 0;
     this.cameraRig.recoilPitch = 0;
     this.cameraRig.recoilYaw = 0;
-    // enemy spawns at the far end with a random weapon
-    this.enemy.setWeapon(ENEMY_WEAPONS[Math.floor(Math.random() * ENEMY_WEAPONS.length)]);
-    this.enemy.spawn(new THREE.Vector3((Math.random() - 0.5) * 16, 0, 34));
+    // both fighters get the SAME random weapon each round (equal footing)
+    const wid = ENEMY_WEAPONS[Math.floor(Math.random() * ENEMY_WEAPONS.length)];
+    this.enemy.setWeapon(wid);
+    this.enemy.spawn(new THREE.Vector3((Math.random() - 0.5) * 10, 0, 29));
     this._lastEhp = this.enemy.bot.health;
+    // hand the player the same gun, equipped + topped up
+    this.weapons.setLoadout(wid);
+    this.weapons.ammo.mag = this.weapons.weapon.magSize;
+    this.weapons._emitAmmo();
 
     this.phase = 'countdown';
     this.timer = COUNTDOWN;
     const round = this.playerScore + this.enemyScore + 1;
-    bus.emit(EV.SKIRMISH_ANNOUNCE, { text: 'ROUND ' + round, sub: this.enemy.weapon.name.toUpperCase() });
+    bus.emit(EV.SKIRMISH_ANNOUNCE, { text: 'ROUND ' + round, sub: 'ENEMY · ' + this.enemy.weapon.name.toUpperCase() });
     this._emitState();
   }
 

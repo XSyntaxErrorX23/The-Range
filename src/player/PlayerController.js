@@ -60,9 +60,10 @@ export class PlayerController {
     const targetEye = p.crouching ? p.eyeCrouch : p.eyeStand;
     p.eyeHeight = damp(p.eyeHeight, targetEye, 14, dt);
 
-    // target speed (walk/run/crouch, slowed while aiming)
+    // target speed (walk/run/crouch, slowed while aiming, scaled by weapon weight)
     let target = p.crouching ? this.CROUCH_SPEED : (this.input.isDown('WALK') ? this.WALK_SPEED : this.RUN_SPEED);
     if (this.weapons && this.weapons.adsSpeedMult) target *= this.weapons.adsSpeedMult();
+    if (this.weapons && this.weapons.equipSpeedMult) target *= this.weapons.equipSpeedMult();
 
     // horizontal velocity
     let hx = p.velocity.x;

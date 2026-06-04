@@ -20,6 +20,7 @@ export const BINDINGS = {
   WEAPON_PICKER: ['KeyB'],
   TOGGLE_VIEW: ['KeyV'], // 1st <-> 3rd person
   RANGE_SETTINGS: ['F2'],
+  RADIO: ['Backquote'], // ` — radio comms wheel
 };
 
 // Mouse buttons
