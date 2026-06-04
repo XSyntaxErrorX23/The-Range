@@ -197,6 +197,8 @@ export class FiringController {
         if (ud.rangeButton != null) { bus.emit(EV.RANGE_DISTANCE, { distance: ud.rangeButton }); continue; }
         // accuracy target: score it (spark only, no decal — it moves)
         let movable = false;
+        // aim-trainer orb: stop the bullet here with a spark, no decal (AimTrainer scores it)
+        if (ud.aimOrb) movable = true;
         if (ud.accuracyTarget) {
           movable = true;
           const r = Math.hypot(worldHit.point.x - ud.center.x, worldHit.point.y - ud.center.y);

@@ -62,6 +62,9 @@ export const EV = {
   SKIRMISH_STATE: 'skirmish:state', // { active, playerScore, enemyScore, target, enemyName, enemyHealth, enemyMax }
   SKIRMISH_ANNOUNCE: 'skirmish:announce', // { text, sub }
   SKIRMISH_END: 'skirmish:end', // { win, playerScore, enemyScore }
+  AIM_STATE: 'aim:state', // gridshot trainer — { active, time, score, shots, hits, acc, streak }
+  AIM_ANNOUNCE: 'aim:announce', // { text, sub }
+  AIM_END: 'aim:end', // { score, acc, best, kps }
   CAMERA_MODE: 'camera:modechanged', // 'first' | 'third'
   SCORE_UPDATE: 'score:update', // ScoreManager state
   RANGE_SETTINGS: 'range:settings', // Settings snapshot

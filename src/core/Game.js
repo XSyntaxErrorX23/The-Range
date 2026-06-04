@@ -12,6 +12,7 @@ import { Abilities } from '../player/Abilities.js';
 import { resolveCollision } from '../player/collision.js';
 import { Range } from '../world/Range.js';
 import { Graveyard } from '../world/Graveyard.js';
+import { AimArena } from '../world/AimArena.js';
 import { setupLights } from '../world/lights.js';
 import { ViewModel } from '../weapons/ViewModel.js';
 import { WeaponManager } from '../weapons/WeaponManager.js';
@@ -19,6 +20,7 @@ import { FiringController } from '../weapons/FiringController.js';
 import { BotManager } from '../enemies/BotManager.js';
 import { Skirmish } from '../modes/Skirmish.js';
 import { ZombieSurvival } from '../modes/ZombieSurvival.js';
+import { AimTrainer } from '../modes/AimTrainer.js';
 import { AudioManager } from '../fx/AudioManager.js';
 import { FXManager } from '../fx/FXManager.js';
 import { Settings } from '../ui/Settings.js';
@@ -88,6 +90,15 @@ export class Game {
       firing: this.firing,
     });
 
+    // Aim trainer (gridshot) coordinator (dormant until bot mode === 'aim')
+    this.aim = new AimTrainer({
+      scene: this.engine.scene,
+      player: this.player,
+      cameraRig: this.cameraRig,
+      settings: this.settings,
+      weapons: this.weapons,
+    });
+
     // UI / FX (HUD builds #damage-layer that FXManager uses — build HUD first)
     this.hud = new HUD(document.getElementById('hud'), this.settings);
     this.fx = new FXManager(this.engine.scene, this.engine.camera);
@@ -145,6 +156,12 @@ export class Game {
       { pos: V(-11, 6, 18), look: V(2, 1, -4) },       // over the graves
       { pos: V(22, 5, -4), look: V(-12, 1.5, 8) },     // sweep across
     ];
+    this._cineWaypointsAim = [
+      { pos: V(0, 2.6, -2.5), look: V(0, 2.0, 14) },   // behind the firing line, downrange
+      { pos: V(-6.5, 3.4, 3), look: V(4, 1.8, 15) },   // sweep from the left
+      { pos: V(6.5, 1.7, 7), look: V(-3, 2.4, 15) },   // low from the right
+      { pos: V(0, 4.2, 9), look: V(0, 1.6, 16) },      // high, close on the target wall
+    ];
     this._cineT = 0;
     this._cineActive = true; // start-screen flythrough until first lock
     this._hasPlayed = false; // once true, pausing stays static (no flythrough)
@@ -159,7 +176,9 @@ export class Game {
 
   /** Glide the camera between waypoints (eased), looping — runs while menus are up. */
   _cineUpdate(dt) {
-    const wps = (this.world === this.graveyard && this.graveyard) ? this._cineWaypointsGrave : this._cineWaypoints;
+    const wps = (this.world === this.graveyard && this.graveyard) ? this._cineWaypointsGrave
+      : (this.world === this.aimArena && this.aimArena) ? this._cineWaypointsAim
+        : this._cineWaypoints;
     const SEG = 5.5; // seconds per leg
     this._cineT += dt;
     const total = this._cineT / SEG;
@@ -201,6 +220,7 @@ export class Game {
     this.overlay.onResetLifetime = () => this.score.resetLifetime();
     this.overlay.onRematch = () => {
       if (this.settings.botMode === 'zombie') this.zombie.activate(this.graveyard);
+      else if (this.settings.botMode === 'aim') this.aim.restart();
       else this.skirmish.rematch();
       this.input.requestLock();
     };
@@ -228,6 +248,13 @@ export class Game {
       this.overlay.showResult({ win, title: win ? 'VICTORY' : 'DEFEAT', detail, canContinue: win && !this.zombie.endless });
       this.input.exitLock();
     };
+    this.aim.onMatchEnd = ({ score, acc, best, kps }) => {
+      this.overlay.showResult({
+        win: acc >= 80, title: 'TIME!',
+        detail: `Score ${score} · ${acc}% acc · best streak ${best} · ${kps}/s`,
+      });
+      this.input.exitLock();
+    };
     this.overlay.onContinue = () => { this.zombie.startEndless(); this.input.requestLock(); };
   }
 
@@ -243,17 +270,30 @@ export class Game {
       this._useWorld(this.range);
       this.range.setLayout('arena');
       this.zombie.deactivate();
+      this.aim.deactivate();
       this.skirmish.activate();
+    } else if (mode === 'aim') {
+      this._ensureAimArena();
+      this._useWorld(this.aimArena);
+      this.zombie.deactivate();
+      this.skirmish.deactivate();
+      this.aim.setArena(this.aimArena);
+      this.aim.activate();
     } else {
       this._useWorld(this.range);
       this.range.setLayout('practice');
       this.zombie.deactivate();
       this.skirmish.deactivate();
+      this.aim.deactivate();
     }
   }
 
   _ensureGraveyard() {
     if (!this.graveyard) this.graveyard = new Graveyard(this.engine.scene);
+  }
+
+  _ensureAimArena() {
+    if (!this.aimArena) this.aimArena = new AimArena(this.engine.scene);
   }
 
   /** Make `world` the active world: toggle visibility, re-tint atmosphere, and
@@ -359,7 +399,8 @@ export class Game {
     // skirmish / zombie round logic; either may freeze the player between rounds
     this.skirmish.update(dt);
     this.zombie.update(dt);
-    const frozen = this.skirmish.playerFrozen() || this.zombie.playerFrozen();
+    this.aim.update(dt);
+    const frozen = this.skirmish.playerFrozen() || this.zombie.playerFrozen() || this.aim.playerFrozen();
 
     // radio comms wheel: hold ` to open, mouse to aim a slice, release to send.
     // While open the look deltas drive the selector instead of the view.

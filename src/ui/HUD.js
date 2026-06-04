@@ -174,6 +174,15 @@ export class HUD {
       '<span class="zb-credits" id="zb-credits">¤ 0</span>';
     this.root.appendChild(this.zombiebar);
 
+    // aim trainer (gridshot) status bar
+    this.aimbar = this._el('div'); this.aimbar.id = 'aimbar';
+    this.aimbar.innerHTML =
+      '<span class="ab-time" id="ab-time">0:60</span>' +
+      '<span class="ab-stat">SCORE <b id="ab-score">0</b></span>' +
+      '<span class="ab-stat">ACC <b id="ab-acc">100%</b></span>' +
+      '<span class="ab-stat">STREAK <b id="ab-streak">0</b></span>';
+    this.root.appendChild(this.aimbar);
+
     // damage feedback + round announcements
     this.hurt = this._el('div'); this.hurt.id = 'hurt';
     this.root.appendChild(this.hurt);
@@ -209,6 +218,18 @@ export class HUD {
     document.getElementById('eh-name').textContent = 'ENEMY · ' + (s.enemyName || 'BOT').toUpperCase();
     const fill = document.getElementById('eh-fill');
     if (fill) fill.style.width = Math.max(0, Math.round(100 * s.enemyHealth / (s.enemyMax || 100))) + '%';
+  }
+
+  setAim(s) {
+    this.aimbar.classList.toggle('show', !!s.active);
+    this.rangepanel.style.display = s.active ? 'none' : '';
+    if (!s.active) return;
+    const t = Math.max(0, s.time | 0);
+    document.getElementById('ab-time').textContent = `0:${String(t).padStart(2, '0')}`;
+    document.getElementById('ab-time').classList.toggle('low', !s.countdown && t <= 10);
+    document.getElementById('ab-score').textContent = String(s.score);
+    document.getElementById('ab-acc').textContent = s.acc + '%';
+    document.getElementById('ab-streak').textContent = String(s.streak);
   }
 
   setZombie(s) {
@@ -392,6 +413,8 @@ export class HUD {
     bus.on(EV.SKIRMISH_ANNOUNCE, (a) => this.announceShow(a.text, a.sub));
     bus.on(EV.ZOMBIE_STATE, (s) => this.setZombie(s));
     bus.on(EV.ZOMBIE_ANNOUNCE, (a) => this.announceShow(a.text, a.sub));
+    bus.on(EV.AIM_STATE, (s) => this.setAim(s));
+    bus.on(EV.AIM_ANNOUNCE, (a) => this.announceShow(a.text, a.sub));
     bus.on(EV.PICKUP, ({ type }) => this.showPickup(type));
   }
 }

@@ -82,7 +82,7 @@ export class Overlay {
       `<div class="subtitle">${returning ? 'Welcome back, agent' : 'Practice · Skills Test'}</div>`;
 
     // mode selector (Practice / Skirmish / Zombie)
-    this._practiceMode = ['skirmish', 'zombie'].includes(this.settings.botMode) ? 'static' : this.settings.botMode;
+    this._practiceMode = ['skirmish', 'zombie', 'aim'].includes(this.settings.botMode) ? 'static' : this.settings.botMode;
     this.modeRow = this._el('div', 'mode-row');
     const mkMode = (key, title, desc) => {
       const b = document.createElement('button');
@@ -95,6 +95,7 @@ export class Overlay {
     this.modeRow.appendChild(mkMode('practice', 'PRACTICE RANGE', 'Drills & dummies'));
     this.modeRow.appendChild(mkMode('skirmish', 'SKIRMISH 1V1', 'Duel a bot · first to 5'));
     this.modeRow.appendChild(mkMode('zombie', 'ZOMBIE SURVIVAL', 'Waves · boss · survive'));
+    this.modeRow.appendChild(mkMode('aim', 'AIM TRAINER', 'Gridshot · 60s flick drill'));
     sp.appendChild(this.modeRow);
 
     // IGN entry
@@ -230,7 +231,7 @@ export class Overlay {
     p.appendChild(this._slider('Volume', 0, 1, 0.05, s.volume, (v) => { s.set('volume', v); }, (v) => Math.round(v * 100) + '%'));
 
     p.appendChild(this._select('View', [['first', 'First person'], ['third', 'Third person']], s.view, (v) => s.set('view', v)));
-    p.appendChild(this._select('Bot Mode', [['static', 'Static'], ['strafe', 'Strafing'], ['popup', 'Pop-up drill'], ['skirmish', 'Skirmish (1v1)'], ['zombie', 'Zombie Survival']], s.botMode, (v) => s.set('botMode', v)));
+    p.appendChild(this._select('Bot Mode', [['static', 'Static'], ['strafe', 'Strafing'], ['popup', 'Pop-up drill'], ['skirmish', 'Skirmish (1v1)'], ['zombie', 'Zombie Survival'], ['aim', 'Aim Trainer']], s.botMode, (v) => s.set('botMode', v)));
     p.appendChild(this._select('AI Difficulty', [['easy', 'Easy'], ['medium', 'Medium'], ['hard', 'Hard']], s.aiDifficulty, (v) => s.set('aiDifficulty', v)));
     p.appendChild(this._select('Scope Mode', [['hold', 'Hold'], ['toggle', 'Toggle']], s.scopeMode, (v) => s.set('scopeMode', v)));
     p.appendChild(this._toggle('Bot Armor', s.botArmor, (v) => s.set('botArmor', v)));
@@ -422,7 +423,7 @@ export class Overlay {
   }
 
   _selectMode(key) {
-    if (key === 'skirmish' || key === 'zombie') this.settings.set('botMode', key);
+    if (key === 'skirmish' || key === 'zombie' || key === 'aim') this.settings.set('botMode', key);
     else this.settings.set('botMode', this._practiceMode || 'static');
     this._refreshModeButtons();
   }
@@ -430,7 +431,7 @@ export class Overlay {
   _refreshModeButtons() {
     if (!this.modeRow) return;
     const bm = this.settings.botMode;
-    const cur = bm === 'skirmish' || bm === 'zombie' ? bm : 'practice';
+    const cur = bm === 'skirmish' || bm === 'zombie' || bm === 'aim' ? bm : 'practice';
     for (const b of this.modeRow.children) b.classList.toggle('sel', b.dataset.mode === cur);
   }
 

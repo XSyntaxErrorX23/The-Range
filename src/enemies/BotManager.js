@@ -40,6 +40,7 @@ export class BotManager {
     this.mode = mode;
     this.skirmish = mode === 'skirmish';
     this.zombie = mode === 'zombie';
+    this.aim = mode === 'aim'; // gridshot trainer owns its own orbs
     for (const b of this.pool) b.hide();
     this.spawnCooldown = 0;
     this._dirty = true;
@@ -118,7 +119,7 @@ export class BotManager {
       }
     }
 
-    if (!this.skirmish && !this.zombie) {
+    if (!this.skirmish && !this.zombie && !this.aim) {
       const target = this.mode === 'popup' ? this.popupActive : this.maxActive;
       if (activeCount < target && this.spawnCooldown <= 0) {
         this._spawnOne();
