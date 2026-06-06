@@ -257,6 +257,7 @@ export class Overlay {
     p.innerHTML = '<h2>SETTINGS</h2>';
 
     p.appendChild(this._slider('Mouse Sensitivity', 0.2, 3, 0.05, s.sensitivity, (v) => { s.set('sensitivity', v); }, (v) => v.toFixed(2)));
+    p.appendChild(this._slider('Scoped Sensitivity', 0.1, 2, 0.05, s.scopeSens, (v) => { s.set('scopeSens', v); }, (v) => v.toFixed(2) + '×'));
     p.appendChild(this._slider('Field of View', 70, 110, 1, s.fov, (v) => { s.set('fov', v); }, (v) => v + '°'));
     p.appendChild(this._slider('Volume', 0, 1, 0.05, s.volume, (v) => { s.set('volume', v); }, (v) => Math.round(v * 100) + '%'));
 

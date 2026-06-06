@@ -17,6 +17,10 @@ const BASE_SENS = 0.0022; // rad per pixel at sensitivity = 1
 export class CameraRig {
   constructor(camera, input, player, settings) {
     this.camera = camera;
+    // FPS look order: yaw (world-up) THEN pitch (local-right). The three.js default
+    // 'XYZ' tilts the horizon (roll) when turning while looking up/down — very
+    // visible mid-360. 'YXZ' keeps the view upright through any spin.
+    this.camera.rotation.order = 'YXZ';
     this.input = input;
     this.player = player;
     this.settings = settings;
@@ -27,6 +31,10 @@ export class CameraRig {
     this.recoilPitch = 0;
     this.recoilYaw = 0;
     this.recoverLambda = 9;
+
+    // scoped-aim state -> applies a separate sensitivity multiplier while sniping
+    this._scopedAim = false;
+    bus.on(EV.ADS_CHANGED, ({ isADS, scoped }) => { this._scopedAim = !!(isADS && scoped); });
 
     this.mode = 'first';
     this.tpDistance = 3.2;
@@ -75,8 +83,13 @@ export class CameraRig {
    * sim steps so the movement basis + aim ray use the fresh orientation.
    */
   applyLook(dx, dy) {
-    const sens = BASE_SENS * (this.settings.sensitivity ?? 1);
+    // scoped snipers use their own sensitivity multiplier on top of the base sens
+    const scopeMult = this._scopedAim ? (this.settings.scopeSens ?? 1) : 1;
+    const sens = BASE_SENS * (this.settings.sensitivity ?? 1) * scopeMult;
     this.yaw -= dx * sens;
+    // wrap into [-PI, PI] so yaw never grows unbounded across repeated 360s
+    const TAU = Math.PI * 2;
+    this.yaw = ((this.yaw + Math.PI) % TAU + TAU) % TAU - Math.PI;
     this.pitch -= dy * sens;
     this.pitch = clamp(this.pitch, -PITCH_LIMIT, PITCH_LIMIT);
   }
@@ -122,7 +135,8 @@ export class CameraRig {
         if (hit) this._desired.copy(this._pivot).addScaledVector(toCam, Math.max(0.4, hit.distance - 0.2));
       }
 
-      this.camera.position.copy(damp3(this.camera.position, this._desired, 14, dt));
+      // snap to the orbit position (no follow lag) so fast spins don't rubber-band
+      this.camera.position.copy(this._desired);
       this.camera.rotation.set(fp, fy, 0);
     }
 

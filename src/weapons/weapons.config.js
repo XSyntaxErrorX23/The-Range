@@ -147,9 +147,11 @@ export const WEAPONS = {
   // ---------------- melee / special ----------------
   knife: {
     id: 'knife', name: 'Knife', category: 'melee', type: 'melee', price: 0,
-    damage: 50, headshotMult: 1.0, legMult: 1.0, fireRate: 120, automatic: false,
+    damage: 50, headshotMult: 1.0, legMult: 1.0, fireRate: 260, automatic: false,
     magSize: Infinity, reserveAmmo: -1, reloadTime: 0, spreadDeg: 0, adsSpreadDeg: 0,
     recoil: R(0, 0, 0.2), canADS: false, adsFovMult: 1, range: 0, meleeRange: 2.5, swapTime: 0.4,
+    // right-click heavy stab: slower, lethal, slightly longer reach (Valorant-style)
+    heavy: { damage: 110, cooldown: 1.0, meleeRange: 3.2 },
   },
   blades: {
     id: 'blades', name: 'Blade Storm', category: 'special', type: 'hitscan', price: 0,

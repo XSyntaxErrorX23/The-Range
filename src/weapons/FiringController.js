@@ -52,6 +52,26 @@ export class FiringController {
 
     if (wm.isBusy()) return;
 
+    // melee: left-click = quick slash, right-click = heavy stab (Valorant-style)
+    if (w.type === 'melee') {
+      if (this.cooldown > 0) return;
+      if (w.heavy && this.input.altPressed()) {
+        this.cooldown = w.heavy.cooldown;
+        this.viewModel.triggerStab();
+        bus.emit(EV.COMBAT_FIRED, { weapon: w });
+        this._melee(w, w.heavy.damage, w.heavy.meleeRange);
+        return;
+      }
+      if (this.input.firePressed()) {
+        this.cooldown = 60 / w.fireRate;
+        this.viewModel.triggerSwing();
+        bus.emit(EV.COMBAT_FIRED, { weapon: w });
+        this._melee(w);
+        return;
+      }
+      return;
+    }
+
     // alt-fire (right-click): start a burst for weapons that define one (Classic)
     if (w.altFire && this.input.altPressed() && this.cooldown <= 0) {
       this._burst = { id: wm.currentId, left: w.altFire.rounds, timer: 0 };
@@ -61,14 +81,6 @@ export class FiringController {
 
     const wantFire = w.automatic ? this.input.fireDown() : this.input.firePressed();
     if (!wantFire || this.cooldown > 0) return;
-
-    if (w.type === 'melee') {
-      this.cooldown = 60 / w.fireRate;
-      this.viewModel.triggerSwing();
-      bus.emit(EV.COMBAT_FIRED, { weapon: w });
-      this._melee(w);
-      return;
-    }
 
     // ammo (Blade Storm reverts instead of reloading when empty)
     const infinite = wm.infiniteAmmoActive;
@@ -236,11 +248,11 @@ export class FiringController {
     }
   }
 
-  _melee(w) {
+  _melee(w, dmgBase = w.damage, range = w.meleeRange) {
     this.cameraRig.getAimRay(this._origin, this._dir);
     this.raycaster.set(this._origin, this._dir);
     this.raycaster.near = 0;
-    this.raycaster.far = w.meleeRange;
+    this.raycaster.far = range;
     const botHit = this.raycaster.intersectObjects(this.bots.targetList, false)[0] || null;
     const worldHit = this.raycaster.intersectObjects(this.world.solids, false)[0] || null;
 
@@ -250,7 +262,7 @@ export class FiringController {
       const zone = botHit.object.userData.hitZone || 'body';
       if (!bot || !bot.alive) return;
       const mult = zone === 'head' ? w.headshotMult : zone === 'leg' ? (w.legMult || 1) : 1;
-      const dmg = Math.round(w.damage * mult);
+      const dmg = Math.round(dmgBase * mult);
       const dead = bot.takeDamage(dmg, zone, botHit.point);
       bus.emit(EV.COMBAT_HIT, { zone, damage: dmg, point: botHit.point.clone(), dead, bot, from: null });
       if (zone === 'head') bus.emit(EV.COMBAT_HEADSHOT, { damage: dmg, point: botHit.point.clone() });

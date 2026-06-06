@@ -35,6 +35,8 @@ export class ViewModel {
     this.kick = 0;
     this.reloadT = 0; this.reloadDur = 0;
     this.swingT = 0;
+    this._swingDir = 1; // alternates each light slash (left / right)
+    this.stabT = 0;
     this.inspectT = 0; this.inspectDur = 2.1;
     this.bobPhase = 0;
     this.swayX = 0; this.swayY = 0;
@@ -50,7 +52,7 @@ export class ViewModel {
     const key = this.models[id] ? id : modelKeyFor(id);
     if (this.currentKey && this.models[this.currentKey]) this.models[this.currentKey].visible = false;
     this.currentKey = key;
-    this.kick = 0; this.reloadT = 0; this.swingT = 0; this.inspectT = 0;
+    this.kick = 0; this.reloadT = 0; this.swingT = 0; this.stabT = 0; this.inspectT = 0;
     this._applyVisibility();
   }
 
@@ -60,7 +62,8 @@ export class ViewModel {
 
   triggerKick(amount = 1) { this.kick = Math.min(1.4, this.kick + amount); this.inspectT = 0; }
   triggerReload(dur) { this.reloadT = dur; this.reloadDur = dur; this.inspectT = 0; }
-  triggerSwing() { this.swingT = 0.25; }
+  triggerSwing() { this._swingDir = -this._swingDir; this.swingT = 0.16; } // fast, alternating side
+  triggerStab() { this.stabT = 0.3; this.inspectT = 0; }
   triggerInspect() { if (!this.isADS) this.inspectT = this.inspectDur; }
 
   update(dt, motion = {}) {
@@ -95,12 +98,28 @@ export class ViewModel {
       reloadRot = 0.6 * s;
     }
 
-    let swingRot = 0, swingPos = 0;
+    // light slash: a horizontal sweep that alternates left/right each click
+    let swingRX = 0, swingRY = 0, swingRZ = 0, swingPX = 0, swingPZ = 0;
     if (this.swingT > 0) {
       this.swingT = Math.max(0, this.swingT - dt);
-      const s = Math.sin((1 - this.swingT / 0.25) * Math.PI);
-      swingRot = -1.2 * s;
-      swingPos = -0.14 * s;
+      const p = 1 - this.swingT / 0.16;       // 0..1 progress
+      const s = Math.sin(p * Math.PI);         // 0..1..0 envelope
+      const d = this._swingDir;
+      swingPX = d * 0.34 * (1 - 2 * p);        // wide sweep across the screen
+      swingPZ = -0.12 * s;                      // slight forward
+      swingRZ = -d * 1.15 * s;                  // roll the blade into the slash
+      swingRY = d * 0.95 * s;                   // wide yaw across
+      swingRX = -0.26 * s;                      // downward arc
+    }
+
+    // heavy stab: a forward thrust (push the blade toward the target, slight dip)
+    let stabPos = 0, stabRot = 0;
+    if (this.stabT > 0) {
+      this.stabT = Math.max(0, this.stabT - dt);
+      const p = 1 - this.stabT / 0.3;
+      const s = Math.sin(Math.min(1, p * 1.4) * Math.PI); // quick thrust + recover
+      stabPos = -0.34 * s; // forward (toward -Z)
+      stabRot = 0.32 * s;  // tip down into the stab
     }
 
     // inspect: tilt the muzzle up to show the top, hold, then drop back down
@@ -119,14 +138,14 @@ export class ViewModel {
     }
 
     model.position.set(
-      this.basePos.x + bobX + this.swayX + inspPX,
+      this.basePos.x + bobX + this.swayX + swingPX + inspPX,
       this.basePos.y + bobY + this.swayY + reloadDip + inspPY,
-      this.basePos.z + this.kick * 0.13 + swingPos + inspPZ
+      this.basePos.z + this.kick * 0.13 + swingPZ + stabPos + inspPZ
     );
     model.rotation.set(
-      -this.kick * 0.2 + reloadRot + swingRot - this.swayY * 1.5 + inspRX,
-      -this.swayX * 1.5 + inspRY,
-      inspRZ
+      -this.kick * 0.2 + reloadRot + swingRX + stabRot - this.swayY * 1.5 + inspRX,
+      -this.swayX * 1.5 + swingRY + inspRY,
+      swingRZ + inspRZ
     );
   }
 }

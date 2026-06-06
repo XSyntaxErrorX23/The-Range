@@ -101,7 +101,15 @@ export class Input {
     // Touch has no pointer lock — drive the same lifecycle with a virtual lock.
     if (this.touch) { this._setVirtualLock(true); return; }
     // Must be called from a user gesture (e.g. overlay click).
-    if (this.dom.requestPointerLock) this.dom.requestPointerLock();
+    if (!this.dom.requestPointerLock) return;
+    // Request RAW mouse deltas (unadjustedMovement) so the OS mouse-acceleration
+    // curve doesn't warp fast flicks/360s. Falls back to plain lock if unsupported.
+    try {
+      const p = this.dom.requestPointerLock({ unadjustedMovement: true });
+      if (p && typeof p.catch === 'function') p.catch(() => { try { this.dom.requestPointerLock(); } catch (_) {} });
+    } catch (_) {
+      this.dom.requestPointerLock();
+    }
   }
 
   exitLock() {
